@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { subtractDays } from '@/lib/compliance'
 import { countryFlag } from '@/lib/countries'
@@ -81,7 +81,14 @@ export default async function TravelHistoryPage({
         <Link href="/wallet" className="text-muted-foreground min-h-[44px] min-w-[44px] flex items-center">
           <ArrowLeft size={20} />
         </Link>
-        <h1 className="text-xl font-bold">Travel History</h1>
+        <h1 className="text-xl font-bold flex-1">Travel History</h1>
+        <Link
+          href="/wallet/history/new"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-foreground text-background text-sm font-semibold min-h-[44px]"
+        >
+          <Plus size={16} />
+          Log travel
+        </Link>
       </div>
 
       {/* Date range filter */}

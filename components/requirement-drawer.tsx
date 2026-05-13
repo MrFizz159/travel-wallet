@@ -131,12 +131,21 @@ function PathChoice({
 
 // ── Main drawer ───────────────────────────────────────────────────────────────
 
+const AUTH_REQ_TYPES = ['visa', 'eta', 'residence_permit', 'right_to_work']
+
+const inputClass = 'w-full h-11 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring'
+const labelClass = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground block mb-1.5'
+
 export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCase, onClose }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showSelfApply, setShowSelfApply] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [authName, setAuthName] = useState(requirement.name)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const isAuthReq = AUTH_REQ_TYPES.includes(requirement.type)
 
   const primaryTask = requirement.sub_tasks.find(t => t.type === 'primary_action' || t.type === 'third_party')
   const isManaged = primaryTask?.service_mode === 'managed'
@@ -261,7 +270,7 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
                     isPending={isPending}
                     onGenerate={() => {}}
                     onGetStarted={() => {}}
-                    onUpload={uiType === 'primary_action' && !isManaged ? handleSubTaskUpload : undefined}
+                    onUpload={uiType === 'primary_action' && !isManaged && !isAuthReq ? handleSubTaskUpload : undefined}
                     onViewCase={task.case_id ? () => { router.push(`/trips/${tripId}/cases/${task.case_id}`); onClose() } : undefined}
                   />
                 )
@@ -310,9 +319,37 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
                       <ExternalLink size={14} />
                     </a>
                   )}
-                  <form onSubmit={handleUpload}>
+                  <form onSubmit={handleUpload} className="flex flex-col gap-3">
                     <input type="hidden" name="requirementId" value={requirement.id} />
                     <input type="hidden" name="tripId" value={tripId} />
+                    <input type="hidden" name="requirement_type" value={requirement.type} />
+
+                    {isAuthReq && (
+                      <>
+                        <div>
+                          <label className={labelClass}>Authorization name</label>
+                          <input
+                            type="text"
+                            name="auth_name"
+                            value={authName}
+                            onChange={e => setAuthName(e.target.value)}
+                            required
+                            className={inputClass}
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className={labelClass}>Issue date</label>
+                            <input type="date" name="issue_date" required className={inputClass} />
+                          </div>
+                          <div>
+                            <label className={labelClass}>Expiry date</label>
+                            <input type="date" name="expiry_date" required className={inputClass} />
+                          </div>
+                        </div>
+                      </>
+                    )}
+
                     <input
                       ref={fileRef}
                       type="file"
@@ -320,21 +357,46 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
                       accept=".pdf,.jpg,.jpeg,.png"
                       className="hidden"
                       onChange={e => {
-                        if (e.currentTarget.files?.[0]) {
+                        if (isAuthReq) {
+                          setSelectedFile(e.currentTarget.files?.[0] ?? null)
+                        } else if (e.currentTarget.files?.[0]) {
                           e.currentTarget.form?.requestSubmit()
                         }
                       }}
                     />
+
                     {uploadError && (
-                      <p className="text-sm text-status-at-risk mb-2">{uploadError}</p>
+                      <p className="text-sm text-status-at-risk">{uploadError}</p>
                     )}
-                    <PrimaryButton
-                      onClick={() => fileRef.current?.click()}
-                      loading={isPending}
-                    >
-                      {!isPending && <Upload size={16} />}
-                      {isPending ? 'Uploading…' : 'Upload confirmation'}
-                    </PrimaryButton>
+
+                    {isAuthReq ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => fileRef.current?.click()}
+                          className="w-full h-11 rounded-xl border border-dashed border-border text-sm text-left px-4 truncate"
+                        >
+                          <span className={selectedFile ? 'text-foreground' : 'text-muted-foreground'}>
+                            {selectedFile ? selectedFile.name : 'Select confirmation file…'}
+                          </span>
+                        </button>
+                        <PrimaryButton
+                          type="submit"
+                          disabled={!selectedFile}
+                          loading={isPending}
+                        >
+                          {isPending ? 'Saving…' : 'Save'}
+                        </PrimaryButton>
+                      </>
+                    ) : (
+                      <PrimaryButton
+                        onClick={() => fileRef.current?.click()}
+                        loading={isPending}
+                      >
+                        {!isPending && <Upload size={16} />}
+                        {isPending ? 'Uploading…' : 'Upload confirmation'}
+                      </PrimaryButton>
+                    )}
                   </form>
                   <button
                     onClick={handleInitiateCase}

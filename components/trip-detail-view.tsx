@@ -9,6 +9,7 @@ import { activateTrip, uploadEvidence } from '@/app/actions/trips'
 import { StatusBadge } from '@/components/status-badge'
 import { RequirementDrawer } from '@/components/requirement-drawer'
 import { TravelEssentialsSection } from '@/components/travel-essentials-section'
+import { HistoricalDocSection } from '@/components/historical-doc-section'
 import { effectiveStatus } from '@/lib/compliance'
 import { cn } from '@/lib/utils'
 import {
@@ -74,14 +75,18 @@ function latestStartLabel(startDate: string, daysRequired: number): string {
 
 // ── Sub-task connected row ────────────────────────────────────────────────────
 
+const AUTH_REQ_TYPES = ['visa', 'eta', 'residence_permit', 'right_to_work']
+
 function SubTaskRowConnected({
   task,
   requirementId,
+  requirementType,
   tripId,
   onOpenDrawer,
 }: {
   task: SubTask
   requirementId: string
+  requirementType: string
   tripId: string
   onOpenDrawer: () => void
 }) {
@@ -106,6 +111,7 @@ function SubTaskRowConnected({
 
   const uiType = (task.type === 'third_party' ? 'primary_action' : task.type) as 'automated' | 'generatable' | 'primary_action'
   const isManaged = task.service_mode === 'managed'
+  const isAuthReq = AUTH_REQ_TYPES.includes(requirementType)
 
   return (
     <div>
@@ -118,7 +124,7 @@ function SubTaskRowConnected({
         status={task.status}
         onGenerate={onOpenDrawer}
         onGetStarted={onOpenDrawer}
-        onUpload={isManaged ? undefined : handleUpload}
+        onUpload={isManaged || isAuthReq ? undefined : handleUpload}
         onViewCase={task.case_id ? () => router.push(`/trips/${tripId}/cases/${task.case_id}`) : undefined}
         isPending={isPending}
       />
@@ -178,9 +184,10 @@ export function TripDetailView({ trip }: Props) {
         </div>
       </div>
 
-      {/* Purpose + duration */}
+      {/* Purpose + duration + origin (historical trips only) */}
       <p className="text-sm text-muted-foreground capitalize mb-5">
         {purposeLabel} · {duration} day{duration !== 1 ? 's' : ''}
+        {trip.origin_country && ` · From ${trip.origin_country}`}
       </p>
     </>
   )
@@ -318,6 +325,7 @@ export function TripDetailView({ trip }: Props) {
                               key={task.id}
                               task={task}
                               requirementId={req.id}
+                              requirementType={req.type}
                               tripId={trip.id}
                               onOpenDrawer={() => setOpenReq(req)}
                             />
@@ -381,10 +389,19 @@ export function TripDetailView({ trip }: Props) {
           </section>
         )}
 
-        <TravelEssentialsSection
-          documents={trip.documents.filter(d => d.layer === 'travel_essentials')}
-          tripId={trip.id}
-        />
+        {trip.is_historical ? (
+          <HistoricalDocSection
+            documents={trip.documents}
+            tripId={trip.id}
+            destinationCountryCode={trip.destination_country_code}
+            destinationCountry={trip.destination_country}
+          />
+        ) : (
+          <TravelEssentialsSection
+            documents={trip.documents.filter(d => d.layer === 'travel_essentials')}
+            tripId={trip.id}
+          />
+        )}
       </div>
     )
   }

@@ -167,6 +167,8 @@ export async function cancelTrip(formData: FormData) {
   redirect('/trips')
 }
 
+const AUTH_REQ_TYPES = ['visa', 'eta', 'residence_permit', 'right_to_work']
+
 export async function uploadEvidence(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -175,6 +177,10 @@ export async function uploadEvidence(formData: FormData) {
   const file = formData.get('file') as File
   const requirementId = formData.get('requirementId') as string
   const tripId = formData.get('tripId') as string
+  const reqType = (formData.get('requirement_type') as string) || 'evidence'
+  const issueDate = (formData.get('issue_date') as string) || null
+  const expiryDate = (formData.get('expiry_date') as string) || null
+  const authName = (formData.get('auth_name') as string) || null
 
   if (!file || file.size === 0) throw new Error('No file provided')
 
@@ -187,12 +193,14 @@ export async function uploadEvidence(formData: FormData) {
 
   if (uploadError) throw new Error(uploadError.message)
 
+  const isAuthType = AUTH_REQ_TYPES.includes(reqType)
+
   const { data: doc } = await supabase
     .from('documents')
     .insert({
       user_id: user.id,
       name: file.name,
-      type: 'evidence',
+      type: isAuthType ? reqType : 'evidence',
       layer: 'compliance',
       trip_id: tripId,
       requirement_id: requirementId,
@@ -202,6 +210,26 @@ export async function uploadEvidence(formData: FormData) {
     })
     .select()
     .single()
+
+  if (isAuthType && issueDate && expiryDate && authName && doc) {
+    const { data: trip } = await supabase
+      .from('trips')
+      .select('destination_country, destination_country_code')
+      .eq('id', tripId)
+      .single()
+    if (trip) {
+      await supabase.from('authorizations').insert({
+        user_id: user.id,
+        name: authName,
+        country: trip.destination_country,
+        country_code: trip.destination_country_code,
+        issue_date: issueDate,
+        expiry_date: expiryDate,
+        document_id: doc.id,
+      })
+      revalidatePath('/wallet')
+    }
+  }
 
   const { data: primaryTask } = await supabase
     .from('sub_tasks')

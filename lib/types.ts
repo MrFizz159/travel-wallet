@@ -43,6 +43,8 @@ export interface Passport {
 export interface Trip {
   id: string
   user_id: string
+  origin_country: string | null
+  origin_country_code: string | null
   destination_country: string
   destination_country_code: string
   start_date: string
@@ -148,6 +150,7 @@ export interface Authorization {
   id: string
   user_id: string
   passport_id: string | null
+  document_id: string | null
   name: string
   country: string
   country_code: string
