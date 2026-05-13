@@ -144,15 +144,14 @@ export interface Threshold {
   created_at: string
 }
 
-export interface Visa {
+export interface Authorization {
   id: string
   user_id: string
-  passport_id: string
+  passport_id: string | null
+  name: string
   country: string
   country_code: string
-  visa_type: 'tourist' | 'business' | 'work' | 'transit' | 'student' | 'other'
-  entry_type: 'single' | 'double' | 'multiple'
-  valid_from: string
-  valid_until: string
+  issue_date: string
+  expiry_date: string
   created_at: string
 }

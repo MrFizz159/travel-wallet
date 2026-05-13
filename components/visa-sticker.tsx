@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { Visa } from '@/lib/types'
+import type { Authorization } from '@/lib/types'
 
 function countryToFlag(code: string): string {
   if (!code || code.length !== 2) return '🌍'
@@ -11,13 +11,13 @@ function formatDate(dateStr: string): string {
 }
 
 interface VisaStickerProps {
-  visa: Visa
+  authorization: Authorization
   className?: string
 }
 
-export default function VisaSticker({ visa, className }: VisaStickerProps) {
+export default function VisaSticker({ authorization, className }: VisaStickerProps) {
   const today = new Date()
-  const expiry = new Date(visa.valid_until + 'T00:00:00')
+  const expiry = new Date(authorization.expiry_date + 'T00:00:00')
   const daysUntilExpiry = Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
   const accentClass =
@@ -29,17 +29,10 @@ export default function VisaSticker({ visa, className }: VisaStickerProps) {
 
   const isExpired = daysUntilExpiry <= 0
 
-  const entryLabel =
-    visa.entry_type === 'single'
-      ? 'Single entry'
-      : visa.entry_type === 'double'
-      ? 'Double entry'
-      : 'Multiple entry'
-
   return (
     <div
       className={cn(
-        'relative overflow-hidden flex flex-col justify-between px-4 py-3 min-h-[88px] border border-border rounded-xl',
+        'relative overflow-hidden flex flex-col justify-between px-4 py-3 min-h-[88px] border border-border rounded-xl gap-1.5',
         isExpired && 'opacity-60',
         className
       )}
@@ -51,22 +44,16 @@ export default function VisaSticker({ visa, className }: VisaStickerProps) {
     >
       <div className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l-xl', accentClass)} />
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span className="text-base">{countryToFlag(visa.country_code)}</span>
-          <span className="text-sm font-semibold text-foreground">{visa.country}</span>
-        </div>
-        <span className="bg-muted text-muted-foreground text-xs font-medium px-2.5 py-1 rounded-full capitalize">
-          {visa.visa_type}
-        </span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-base leading-none">{countryToFlag(authorization.country_code)}</span>
+        <span className="text-xs text-muted-foreground">{authorization.country}</span>
       </div>
 
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
-          {formatDate(visa.valid_from)} – {formatDate(visa.valid_until)}
-        </span>
-        <span className="text-xs text-muted-foreground">{entryLabel}</span>
-      </div>
+      <p className="text-sm font-semibold text-foreground truncate">{authorization.name}</p>
+
+      <p className="text-xs text-muted-foreground">
+        {formatDate(authorization.issue_date)} – {formatDate(authorization.expiry_date)}
+      </p>
     </div>
   )
 }
