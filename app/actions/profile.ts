@@ -9,13 +9,14 @@ export async function updateProfile(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth')
 
-  await supabase.from('profiles').upsert({
-    id: user.id,
+  const { error } = await supabase.from('profiles').update({
     full_name: (formData.get('full_name') as string | null)?.trim() || null,
     nationality: (formData.get('nationality') as string | null)?.trim() || null,
     country_of_residence: (formData.get('country_of_residence') as string | null)?.trim() || null,
     updated_at: new Date().toISOString(),
-  })
+  }).eq('id', user.id)
+
+  if (error) throw new Error(error.message)
 
   revalidatePath('/profile')
   revalidatePath('/')

@@ -49,7 +49,10 @@ export default async function ProfilePage() {
       </div>
 
       {/* Personal details */}
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Personal details</p>
+      <div className="flex items-center gap-3 mb-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground shrink-0">Personal details</p>
+        <div className="flex-1 h-px bg-border" />
+      </div>
       <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden mb-4">
         <div className="px-4 py-3">
           <p className="text-xs text-muted-foreground">Nationality</p>
@@ -74,7 +77,10 @@ export default async function ProfilePage() {
       </div>
 
       {/* Account */}
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Account</p>
+      <div className="flex items-center gap-3 mb-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground shrink-0">Account</p>
+        <div className="flex-1 h-px bg-border" />
+      </div>
       <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden mb-4">
         <div className="px-4 py-3">
           <p className="text-xs text-muted-foreground">Email</p>

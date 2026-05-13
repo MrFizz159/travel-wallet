@@ -42,9 +42,10 @@ export default async function WalletPage() {
       )}
 
       {/* Passports */}
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Passports</p>
-        <Link href="/profile/passports/new" className="text-xs font-semibold text-primary min-h-[44px] flex items-center">
+      <div className="flex items-center gap-3 mb-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground shrink-0">Passports</p>
+        <div className="flex-1 h-px bg-border" />
+        <Link href="/profile/passports/new" className="text-xs font-semibold text-primary border border-primary/30 px-3 py-1 rounded-full shrink-0 min-h-[28px] flex items-center">
           + Add
         </Link>
       </div>
@@ -68,9 +69,10 @@ export default async function WalletPage() {
       )}
 
       {/* Authorizations */}
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Authorizations</p>
-        <Link href="/wallet/authorizations/new" className="text-xs font-semibold text-primary min-h-[44px] flex items-center">
+      <div className="flex items-center gap-3 mb-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground shrink-0">Authorizations</p>
+        <div className="flex-1 h-px bg-border" />
+        <Link href="/wallet/authorizations/new" className="text-xs font-semibold text-primary border border-primary/30 px-3 py-1 rounded-full shrink-0 min-h-[28px] flex items-center">
           + Add
         </Link>
       </div>
@@ -82,7 +84,10 @@ export default async function WalletPage() {
       </div>
 
       {/* History & tracking */}
-      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">History & tracking</p>
+      <div className="flex items-center gap-3 mb-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground shrink-0">History & tracking</p>
+        <div className="flex-1 h-px bg-border" />
+      </div>
       <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden mb-4">
         <Link href="/wallet/history" className="flex items-center gap-3 px-4 py-3 min-h-[44px]">
           <div className="flex-1 min-w-0">
@@ -104,7 +109,10 @@ export default async function WalletPage() {
         </div>
       </div>
 
-      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Documents</p>
+      <div className="flex items-center gap-3 mb-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground shrink-0">Documents</p>
+        <div className="flex-1 h-px bg-border" />
+      </div>
       <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden mb-4">
         <div className="flex items-center gap-3 px-4 py-3 min-h-[44px] opacity-40">
           <div className="flex-1 min-w-0">
