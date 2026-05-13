@@ -96,3 +96,16 @@ export async function createPassportWizard(formData: FormData) {
   await insertPassportRecord(formData, user.id)
   redirect('/')
 }
+
+export async function deletePassport(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth')
+
+  const id = formData.get('id') as string
+  const { error } = await supabase.from('passports').delete().eq('id', id).eq('user_id', user.id)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/wallet')
+  redirect('/wallet')
+}

@@ -3,7 +3,8 @@ import { ChevronRight, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui-kit'
 import PassportCard from '@/components/passport-card'
-import type { Passport } from '@/lib/types'
+import VisaSticker from '@/components/visa-sticker'
+import type { Passport, Authorization } from '@/lib/types'
 
 function monthsUntilExpiry(expiryDate: string) {
   const today = new Date()
@@ -15,13 +16,15 @@ export default async function WalletPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: passports }, { count: completedTripCount }, { data: completedTrips }] = await Promise.all([
+  const [{ data: passports }, { count: completedTripCount }, { data: completedTrips }, { data: authorizations }] = await Promise.all([
     supabase.from('passports').select('*').eq('user_id', user!.id).order('is_primary', { ascending: false }),
     supabase.from('trips').select('id', { count: 'exact', head: true }).eq('user_id', user!.id).eq('state', 'completed'),
     supabase.from('trips').select('destination_country_code').eq('user_id', user!.id).eq('state', 'completed'),
+    supabase.from('authorizations').select('*').eq('user_id', user!.id).order('expiry_date', { ascending: true }),
   ])
 
   const passportList = (passports ?? []) as Passport[]
+  const authorizationList = (authorizations ?? []) as Authorization[]
   const primary = passportList.find(p => p.is_primary) ?? passportList[0] ?? null
   const expiryMonths = primary ? monthsUntilExpiry(primary.expiry_date) : null
   const expiryWarning = expiryMonths !== null && expiryMonths <= 6
@@ -52,7 +55,9 @@ export default async function WalletPage() {
       {passportList.length > 0 ? (
         <div className="flex flex-col gap-3 mb-6">
           {passportList.map(passport => (
-            <PassportCard key={passport.id} passport={passport} />
+            <Link key={passport.id} href={`/wallet/passports/${passport.id}`} className="block">
+              <PassportCard passport={passport} />
+            </Link>
           ))}
         </div>
       ) : (
@@ -76,12 +81,22 @@ export default async function WalletPage() {
           + Add
         </Link>
       </div>
-      <div className="rounded-xl border-2 border-dashed border-border bg-card px-4 py-4 flex items-center gap-3 mb-6 min-h-[88px]">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground">No active authorizations</p>
-          <p className="text-xs text-muted-foreground mt-1">Visas, permits, ETAs, and rights to work or reside</p>
+      {authorizationList.length > 0 ? (
+        <div className="flex flex-col gap-3 mb-6">
+          {authorizationList.map(auth => (
+            <Link key={auth.id} href={`/wallet/authorizations/${auth.id}`} className="block">
+              <VisaSticker authorization={auth} />
+            </Link>
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="rounded-xl border-2 border-dashed border-border bg-card px-4 py-4 flex items-center gap-3 mb-6 min-h-[88px]">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">No active authorizations</p>
+            <p className="text-xs text-muted-foreground mt-1">Visas, permits, ETAs, and rights to work or reside</p>
+          </div>
+        </div>
+      )}
 
       {/* History & tracking */}
       <div className="flex items-center gap-3 mb-3">
