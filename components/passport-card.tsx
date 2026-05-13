@@ -44,7 +44,7 @@ export default function PassportCard({ passport, className }: PassportCardProps)
         monthsUntilExpiry <= 0 && 'opacity-70',
         className
       )}
-      style={{ background: 'linear-gradient(135deg, #1C2440 0%, #0D1118 100%)' }}
+      style={{ background: 'linear-gradient(135deg, #2C3E70 0%, #1A2848 100%)' }}
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2.5">

@@ -42,9 +42,14 @@ export default async function WalletPage() {
       )}
 
       {/* Passports */}
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Passports</p>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Passports</p>
+        <Link href="/profile/passports/new" className="text-xs font-semibold text-primary min-h-[44px] flex items-center">
+          + Add
+        </Link>
+      </div>
       {passportList.length > 0 ? (
-        <div className="flex flex-col gap-3 mb-3">
+        <div className="flex flex-col gap-3 mb-6">
           {passportList.map(passport => (
             <PassportCard key={passport.id} passport={passport} />
           ))}
@@ -52,7 +57,7 @@ export default async function WalletPage() {
       ) : (
         <Link
           href="/profile/passports/new"
-          className="rounded-2xl border-2 border-dashed border-border bg-card px-5 py-4 flex items-center gap-3 mb-3 min-h-[112px]"
+          className="rounded-2xl border-2 border-dashed border-border bg-card px-5 py-4 flex items-center gap-3 mb-6 min-h-[112px]"
         >
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground">Add your passport</p>
@@ -61,15 +66,15 @@ export default async function WalletPage() {
           <span className="text-sm font-semibold text-primary shrink-0">Add →</span>
         </Link>
       )}
-      {passportList.length > 0 && (
-        <Link href="/profile/passports/new" className="flex items-center px-1 py-2 mb-4 min-h-[44px]">
-          <p className="text-sm text-primary font-medium">+ Add passport</p>
-        </Link>
-      )}
 
       {/* Authorizations */}
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Authorizations</p>
-      <div className="rounded-xl border-2 border-dashed border-border bg-card px-4 py-4 flex items-center gap-3 mb-4 min-h-[88px]">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Authorizations</p>
+        <Link href="/wallet/authorizations/new" className="text-xs font-semibold text-primary min-h-[44px] flex items-center">
+          + Add
+        </Link>
+      </div>
+      <div className="rounded-xl border-2 border-dashed border-border bg-card px-4 py-4 flex items-center gap-3 mb-6 min-h-[88px]">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-foreground">No active authorizations</p>
           <p className="text-xs text-muted-foreground mt-1">Visas, permits, ETAs, and rights to work or reside</p>
@@ -77,7 +82,7 @@ export default async function WalletPage() {
       </div>
 
       {/* History & tracking */}
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">History & tracking</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">History & tracking</p>
       <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden mb-4">
         <Link href="/wallet/history" className="flex items-center gap-3 px-4 py-3 min-h-[44px]">
           <div className="flex-1 min-w-0">
@@ -99,7 +104,7 @@ export default async function WalletPage() {
         </div>
       </div>
 
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Documents</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Documents</p>
       <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden mb-4">
         <div className="flex items-center gap-3 px-4 py-3 min-h-[44px] opacity-40">
           <div className="flex-1 min-w-0">
