@@ -5,8 +5,17 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-surface: var(--surface);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-status-compliant: var(--status-compliant);
+  --color-status-compliant-bg: var(--status-compliant-bg);
+  --color-status-incomplete: var(--status-incomplete);
+  --color-status-incomplete-bg: var(--status-incomplete-bg);
+  --color-status-at-risk: var(--status-at-risk);
+  --color-status-at-risk-bg: var(--status-at-risk-bg);
+  --color-status-verified: var(--status-verified);
+  --color-status-verified-bg: var(--status-verified-bg);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
@@ -49,41 +58,75 @@
 }
 
 :root {
+  /* ── Status colours ──────────────────────────────────────────────────────── */
+  /* Compliant / green — muted sage, not neon. Reassuring, not celebratory. */
+  --status-compliant: oklch(0.500 0.120 152);
+  --status-compliant-bg: oklch(0.955 0.030 152);
+  /* Incomplete / amber — warm orange-amber. Visible urgency without alarm. */
+  --status-incomplete: oklch(0.640 0.160 48);
+  --status-incomplete-bg: oklch(0.975 0.040 75);
+  /* At-risk / red — clear danger, but not pure red (which reads as error). */
+  --status-at-risk: oklch(0.560 0.210 22);
+  --status-at-risk-bg: oklch(0.970 0.025 22);
+  /* Verified / grey — neutral, document-stored state */
+  --status-verified: oklch(0.500 0.010 250);
+  --status-verified-bg: oklch(0.955 0.006 250);
+
+  /* ── Page surface — light cool-grey, creates depth beneath white cards ── */
+  --surface: oklch(0.960 0.008 250);
+
+  /* ── Core palette ────────────────────────────────────────────────────────── */
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0.140 0.010 250);
+
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.140 0.010 250);
+
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.140 0.010 250);
+
+  /* Primary — deep indigo-slate. Authoritative, not corporate blue. */
+  --primary: oklch(0.380 0.140 258);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
+
+  --secondary: oklch(0.948 0 0);
+  --secondary-foreground: oklch(0.140 0.010 250);
+
+  --muted: oklch(0.945 0 0);
+  --muted-foreground: oklch(0.500 0.008 250);
+
+  --accent: oklch(0.945 0 0);
+  --accent-foreground: oklch(0.140 0.010 250);
+
+  --destructive: oklch(0.560 0.210 22);
+
+  --border: oklch(0.900 0 0);
+  --input: oklch(0.900 0 0);
+  --ring: oklch(0.380 0.140 258);
+
+  /* Charts — greyscale for now, can be extended */
+  --chart-1: oklch(0.870 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+
+  /* Radius — 0.75rem base gives rounded-xl = 1.05rem, which feels modern-mobile
+     without being bubbly. Slightly more generous than the default 0.625rem. */
+  --radius: 0.75rem;
+
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary: oklch(0.380 0.140 258);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent: oklch(0.970 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
+  --surface: oklch(0.110 0.006 250);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -126,5 +169,8 @@
   }
   html {
     @apply font-sans;
+  }
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
