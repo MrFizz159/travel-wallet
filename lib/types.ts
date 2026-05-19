@@ -1,8 +1,8 @@
 export type TripState = 'exploratory' | 'active' | 'completed' | 'cancelled'
 export type ComplianceStatus = 'compliant' | 'incomplete' | 'at_risk'
 export type RequirementStatus = 'not_started' | 'in_progress' | 'at_risk' | 'complete'
-export type SubTaskType = 'automated' | 'generatable' | 'primary_action' | 'third_party'
-export type SubTaskStatus = 'pending' | 'complete' | 'case_in_progress'
+export type SubTaskType = 'automated' | 'generatable' | 'primary_action' | 'third_party' | 'informational'
+export type SubTaskStatus = 'pending' | 'complete' | 'case_in_progress' | 'submitted'
 export type DocumentLayer = 'compliance' | 'travel_essentials' | 'profile'
 export type TripPurpose = 'business' | 'tourism' | 'education' | 'relocation' | 'other'
 export type AssessmentResult = 'action_required' | 'no_action_required' | 'review_required'
@@ -89,6 +89,8 @@ export interface SubTask {
   ai_generated_content: string | null
   approval_status: ApprovalStatus | null
   evidence_document_id: string | null
+  submitted_at: string | null
+  description: string | null
   sort_order: number
   created_at: string
 }

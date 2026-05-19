@@ -110,6 +110,7 @@ export async function activateTrip(formData: FormData) {
         type: stubTask.type,
         status: taskStatus,
         sort_order: stubTask.sort_order,
+        description: stubTask.description ?? null,
       })
     }
   }
@@ -262,6 +263,110 @@ export async function uploadEvidence(formData: FormData) {
     .update({ compliance_status: newStatus })
     .eq('id', tripId)
     .eq('user_id', user.id)
+
+  revalidatePath(`/trips/${tripId}`)
+}
+
+export async function markApplicationSubmitted(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth')
+
+  const subTaskId = formData.get('subTaskId') as string
+  const requirementId = formData.get('requirementId') as string
+  const tripId = formData.get('tripId') as string
+
+  await supabase
+    .from('sub_tasks')
+    .update({ status: 'submitted', submitted_at: new Date().toISOString() })
+    .eq('id', subTaskId)
+
+  await supabase
+    .from('requirements')
+    .update({ status: 'in_progress' })
+    .eq('id', requirementId)
+
+  const { data: allRequirements } = await supabase
+    .from('requirements')
+    .select('*')
+    .eq('trip_id', tripId)
+
+  const newStatus = computeComplianceStatus(allRequirements ?? [])
+  await supabase
+    .from('trips')
+    .update({ compliance_status: newStatus })
+    .eq('id', tripId)
+    .eq('user_id', user.id)
+
+  revalidatePath(`/trips/${tripId}`)
+}
+
+export async function generateLetter(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth')
+
+  const subTaskId = formData.get('subTaskId') as string
+  const requirementId = formData.get('requirementId') as string
+  const tripId = formData.get('tripId') as string
+
+  // Stub: stores placeholder content so the step advances to "generated" state
+  const content = `[Generated letter — download and have it signed, then upload the signed copy to complete this step.]`
+
+  await supabase
+    .from('sub_tasks')
+    .update({ ai_generated_content: content, approval_status: 'draft' })
+    .eq('id', subTaskId)
+
+  await supabase
+    .from('requirements')
+    .update({ status: 'in_progress' })
+    .eq('id', requirementId)
+
+  revalidatePath(`/trips/${tripId}`)
+}
+
+export async function uploadSignedLetter(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth')
+
+  const file = formData.get('file') as File
+  const subTaskId = formData.get('subTaskId') as string
+  const requirementId = formData.get('requirementId') as string
+  const tripId = formData.get('tripId') as string
+
+  if (!file || file.size === 0) throw new Error('No file provided')
+
+  const ext = file.name.split('.').pop() ?? 'bin'
+  const path = `${user.id}/${tripId}/${requirementId}/letters/${Date.now()}.${ext}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('documents')
+    .upload(path, file, { contentType: file.type })
+
+  if (uploadError) throw new Error(uploadError.message)
+
+  const { data: doc } = await supabase
+    .from('documents')
+    .insert({
+      user_id: user.id,
+      name: file.name,
+      type: 'letter',
+      layer: 'compliance',
+      trip_id: tripId,
+      requirement_id: requirementId,
+      file_url: path,
+      file_size: file.size,
+      mime_type: file.type,
+    })
+    .select()
+    .single()
+
+  await supabase
+    .from('sub_tasks')
+    .update({ status: 'complete', approval_status: 'signed', evidence_document_id: doc?.id ?? null })
+    .eq('id', subTaskId)
 
   revalidatePath(`/trips/${tripId}`)
 }

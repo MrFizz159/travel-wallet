@@ -21,8 +21,8 @@ import { countryFlagUrl } from '@/lib/countries'
 
 export type StatusValue = 'compliant' | 'incomplete' | 'at_risk' | 'verified'
 export type RequirementStatusValue = 'not_started' | 'in_progress' | 'at_risk' | 'complete'
-export type SubTaskType = 'automated' | 'generatable' | 'primary_action'
-export type SubTaskStatus = 'pending' | 'complete' | 'case_in_progress'
+export type SubTaskType = 'automated' | 'generatable' | 'primary_action' | 'informational'
+export type SubTaskStatus = 'pending' | 'complete' | 'case_in_progress' | 'submitted'
 export type AvatarSize = 'sm' | 'md' | 'lg'
 export type TripStatus = 'compliant' | 'incomplete' | 'at_risk' | null
 

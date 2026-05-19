@@ -2,8 +2,9 @@ export type AssessmentResult = 'action_required' | 'no_action_required' | 'revie
 
 export interface StubSubTask {
   name: string
-  type: 'automated' | 'generatable' | 'primary_action' | 'third_party'
+  type: 'automated' | 'generatable' | 'primary_action' | 'third_party' | 'informational'
   sort_order: number
+  description?: string
 }
 
 export interface StubRequirement {
@@ -41,17 +42,20 @@ const STUBS: Record<string, AssessmentOutput> = {
           'Apply via the Indian government e-Visa portal. Processing takes 3–5 working days. You will receive your Electronic Travel Authorisation (ETA) by email — no embassy visit required.',
         external_link: 'https://indianvisaonline.gov.in',
         what_you_need: [
-          'Valid passport (minimum 6 months remaining beyond return date)',
-          'Recent passport photograph (white background)',
-          'Letter of support from your employer',
-          'Letter of invitation from your Indian host company',
+          'Passport (original + copy)',
+          'Passport photograph',
+          'Letter of support (signed)',
+          'Letter of invitation (signed)',
           'Application fee (USD 25)',
         ],
         sub_tasks: [
-          { name: 'Passport validity', type: 'automated', sort_order: 0 },
-          { name: 'Letter of support', type: 'generatable', sort_order: 1 },
-          { name: 'Letter of invitation', type: 'generatable', sort_order: 2 },
-          { name: 'Apply for e-Business Visa', type: 'primary_action', sort_order: 3 },
+          { name: 'Passport validity',          type: 'automated',     sort_order: 0, description: 'Checked automatically when trip activates' },
+          { name: 'Letter of support',          type: 'generatable',   sort_order: 1, description: 'Get signed by your manager or HR, then upload signed copy' },
+          { name: 'Letter of invitation',       type: 'generatable',   sort_order: 2, description: 'Get signed by the host company, then upload signed copy' },
+          { name: 'Submit application',         type: 'third_party',   sort_order: 3, description: 'Start your application at the government portal' },
+          { name: 'Complete the application',   type: 'informational', sort_order: 4, description: 'Fill in all sections and pay the fee (USD 25)' },
+          { name: 'Await approval',             type: 'informational', sort_order: 5, description: 'Processing takes 3–5 working days' },
+          { name: 'Upload e-visa',              type: 'primary_action',sort_order: 6, description: 'Return once approved and upload your e-visa confirmation' },
         ],
       },
     ],
@@ -76,8 +80,8 @@ const STUBS: Record<string, AssessmentOutput> = {
           'Approximate travel itinerary',
         ],
         sub_tasks: [
-          { name: 'Passport validity', type: 'automated', sort_order: 0 },
-          { name: 'Apply for ESTA', type: 'primary_action', sort_order: 1 },
+          { name: 'Passport validity', type: 'automated',      sort_order: 0, description: 'Checked automatically when trip activates' },
+          { name: 'Apply for ESTA',    type: 'primary_action', sort_order: 1, description: 'Complete the application at the official CBP website and upload your approval' },
         ],
       },
     ],
@@ -99,8 +103,8 @@ const STUBS: Record<string, AssessmentOutput> = {
           'https://immi.homeaffairs.gov.au/visas/getting-a-visa/visa-listing/electronic-travel-authority-601',
         what_you_need: ['Valid passport', 'AUD 20 application charge'],
         sub_tasks: [
-          { name: 'Passport validity', type: 'automated', sort_order: 0 },
-          { name: 'Apply for ETA', type: 'primary_action', sort_order: 1 },
+          { name: 'Passport validity', type: 'automated',      sort_order: 0, description: 'Checked automatically when trip activates' },
+          { name: 'Apply for ETA',     type: 'primary_action', sort_order: 1, description: 'Apply via the Australian ETA app and upload your approval' },
         ],
       },
     ],
@@ -121,8 +125,8 @@ const STUBS: Record<string, AssessmentOutput> = {
         external_link: 'https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/eta.html',
         what_you_need: ['Valid passport', 'Credit or debit card (CAD 7 fee)', 'Email address'],
         sub_tasks: [
-          { name: 'Passport validity', type: 'automated', sort_order: 0 },
-          { name: 'Apply for eTA', type: 'primary_action', sort_order: 1 },
+          { name: 'Passport validity', type: 'automated',      sort_order: 0, description: 'Checked automatically when trip activates' },
+          { name: 'Apply for eTA',     type: 'primary_action', sort_order: 1, description: 'Apply online via the Government of Canada website and upload your approval' },
         ],
       },
     ],
