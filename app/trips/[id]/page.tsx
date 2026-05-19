@@ -1,6 +1,4 @@
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { TripDetailView } from '@/components/trip-detail-view'
 import { cancelTrip } from '@/app/actions/trips'
@@ -37,10 +35,7 @@ export default async function TripDetailPage({
   if (!trip) notFound()
 
   return (
-    <div className="max-w-lg mx-auto px-4 pt-6 pb-4">
-      <Link href="/trips" className="inline-flex items-center text-muted-foreground min-h-[44px] min-w-[44px] mb-1 -ml-1">
-        <ArrowLeft size={20} />
-      </Link>
+    <div className="max-w-lg mx-auto px-4 pb-4">
       <TripDetailView trip={trip as TripDetail} />
       {(trip.state === 'exploratory' || trip.state === 'active') && (
         <div className="mt-8 pt-6 border-t border-border">

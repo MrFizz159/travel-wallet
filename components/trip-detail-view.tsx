@@ -2,7 +2,8 @@
 
 import { useState, useTransition, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, AlertTriangle } from 'lucide-react'
+import Link from 'next/link'
+import { CheckCircle, AlertTriangle, ArrowLeft } from 'lucide-react'
 import { countryImageUrl } from '@/lib/countries'
 import { runAssessment } from '@/lib/assessment/stub'
 import { activateTrip } from '@/app/actions/trips'
@@ -132,6 +133,13 @@ export function TripDetailView({ trip }: Props) {
         />
         {/* Gradient overlay — fades image into content below */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
+        {/* Back button bubble */}
+        <Link
+          href="/trips"
+          className="absolute top-3 left-4 w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white"
+        >
+          <ArrowLeft size={18} />
+        </Link>
         {/* Status chip overlaid on gradient */}
         {trip.state === 'active' && (
           <div className="absolute bottom-3 left-4">
