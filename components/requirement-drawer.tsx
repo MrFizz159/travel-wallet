@@ -706,6 +706,27 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
             </div>
           )}
 
+          {/* Guidance */}
+          {requirement.guidance && (
+            <div className="mb-5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                Guidance
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{requirement.guidance}</p>
+              {requirement.external_link && (
+                <a
+                  href={requirement.external_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
+                >
+                  Apply at official portal
+                  <ExternalLink size={13} />
+                </a>
+              )}
+            </div>
+          )}
+
           {/* Centuro CTA or managed banner */}
           {(isManaged || hasManualSteps) && (
             <div className="mb-5">
@@ -734,7 +755,7 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
                   className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border border-border bg-muted text-left disabled:opacity-60 active:bg-border/60 transition-colors duration-100"
                 >
                   <div>
-                    <p className="text-sm font-semibold">Let Centuro handle this for you</p>
+                    <p className="text-sm font-semibold">Initiate with Centuro</p>
                     <p className="text-xs text-muted-foreground mt-0.5">Full end-to-end management</p>
                   </div>
                   <ChevronRight size={16} className="text-muted-foreground shrink-0" />

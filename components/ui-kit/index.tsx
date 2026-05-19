@@ -545,6 +545,7 @@ interface SubTaskRowProps {
   name: string
   type: SubTaskType
   status: SubTaskStatus
+  isStarted?: boolean
   onGenerate?: () => void
   onGetStarted?: () => void
   onUpload?: (file: File) => void
@@ -557,6 +558,7 @@ export function SubTaskRow({
   name,
   type,
   status,
+  isStarted = false,
   onGenerate,
   onGetStarted,
   onUpload,
@@ -565,12 +567,6 @@ export function SubTaskRow({
   className,
 }: SubTaskRowProps) {
   const isComplete = status === 'complete'
-  const fileInputRef = React.useRef<HTMLInputElement>(null)
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.currentTarget.files?.[0]
-    if (file && onUpload) onUpload(file)
-  }
 
   return (
     <div className={cn('flex items-center gap-3 px-4 py-2.5 min-h-[44px]', className)}>
@@ -639,38 +635,19 @@ export function SubTaskRow({
         )
       )}
 
-      {!isComplete && status !== 'case_in_progress' && type === 'primary_action' && (
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={onGetStarted}
-            className="text-xs px-2.5 py-1 rounded-full border border-border font-semibold text-foreground min-h-[28px]"
-          >
-            Get started
-          </button>
+      {status === 'submitted' && (
+        <span className="text-xs text-status-incomplete font-medium shrink-0">Awaiting approval</span>
+      )}
 
-          {/* Hidden file input for upload */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isPending}
-            className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-primary text-primary-foreground font-semibold disabled:opacity-60 min-h-[28px]"
-          >
-            {isPending ? (
-              <Loader2 size={10} className="animate-spin" />
-            ) : (
-              <Upload size={10} />
-            )}
-            Upload
-          </button>
-        </div>
+      {!isComplete && status !== 'case_in_progress' && status !== 'submitted' && type === 'primary_action' && (
+        <button
+          type="button"
+          onClick={onGetStarted}
+          disabled={isPending}
+          className="text-xs px-2.5 py-1 rounded-full border border-border font-semibold text-foreground min-h-[28px] shrink-0 disabled:opacity-50"
+        >
+          {isPending ? <Loader2 size={10} className="animate-spin" /> : (isStarted ? 'Upload evidence' : 'Start application')}
+        </button>
       )}
     </div>
   )

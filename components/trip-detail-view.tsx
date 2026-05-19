@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { CheckCircle, AlertTriangle } from 'lucide-react'
 import { countryImageUrl } from '@/lib/countries'
 import { runAssessment } from '@/lib/assessment/stub'
-import { activateTrip, uploadEvidence } from '@/app/actions/trips'
+import { activateTrip } from '@/app/actions/trips'
 import { StatusBadge } from '@/components/status-badge'
 import { RequirementDrawer } from '@/components/requirement-drawer'
 import { TravelEssentialsSection } from '@/components/travel-essentials-section'
@@ -81,54 +81,34 @@ function SubTaskRowConnected({
   task,
   requirementId,
   requirementType,
+  requirementStatus,
   tripId,
   onOpenDrawer,
 }: {
   task: SubTask
   requirementId: string
   requirementType: string
+  requirementStatus: string
   tripId: string
   onOpenDrawer: () => void
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [uploadError, setUploadError] = useState<string | null>(null)
-
-  function handleUpload(file: File) {
-    setUploadError(null)
-    const fd = new FormData()
-    fd.append('requirementId', requirementId)
-    fd.append('tripId', tripId)
-    fd.append('file', file)
-    startTransition(async () => {
-      try {
-        await uploadEvidence(fd)
-      } catch (err) {
-        setUploadError(err instanceof Error ? err.message : 'Upload failed')
-      }
-    })
-  }
 
   const uiType = (task.type === 'third_party' ? 'primary_action' : task.type) as 'automated' | 'generatable' | 'primary_action'
-  const isManaged = task.service_mode === 'managed'
-  const isAuthReq = AUTH_REQ_TYPES.includes(requirementType)
+  const isStarted = requirementStatus === 'in_progress' || requirementStatus === 'at_risk'
 
   return (
-    <div>
-      {uploadError && (
-        <p className="text-xs text-status-at-risk px-4 pb-1">{uploadError}</p>
-      )}
-      <SubTaskRow
-        name={task.name}
-        type={uiType}
-        status={task.status}
-        onGenerate={onOpenDrawer}
-        onGetStarted={onOpenDrawer}
-        onUpload={isManaged || isAuthReq ? undefined : handleUpload}
-        onViewCase={task.case_id ? () => router.push(`/trips/${tripId}/cases/${task.case_id}`) : undefined}
-        isPending={isPending}
-      />
-    </div>
+    <SubTaskRow
+      name={task.name}
+      type={uiType}
+      status={task.status}
+      isStarted={isStarted}
+      onGenerate={onOpenDrawer}
+      onGetStarted={onOpenDrawer}
+      onViewCase={task.case_id ? () => router.push(`/trips/${tripId}/cases/${task.case_id}`) : undefined}
+      isPending={isPending}
+    />
   )
 }
 
@@ -326,6 +306,7 @@ export function TripDetailView({ trip }: Props) {
                               task={task}
                               requirementId={req.id}
                               requirementType={req.type}
+                              requirementStatus={req.status}
                               tripId={trip.id}
                               onOpenDrawer={() => setOpenReq(req)}
                             />
