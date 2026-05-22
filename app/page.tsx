@@ -192,7 +192,7 @@ export default async function HomePage() {
 
                 {/* Outstanding task CTA — always shown when action needed */}
                 {topTask ? (
-                  <div className="rounded-xl bg-foreground text-background px-4 py-3 flex items-center justify-between min-h-[48px]">
+                  <div className="rounded-xl bg-primary text-primary-foreground px-4 py-3 flex items-center justify-between min-h-[48px]">
                     <p className="text-sm font-semibold truncate pr-3">{topTask.name}</p>
                     <span className="text-sm font-semibold shrink-0">Continue →</span>
                   </div>
