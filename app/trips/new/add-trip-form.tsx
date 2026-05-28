@@ -202,18 +202,25 @@ export function AddTripForm({ passports }: Props) {
 
       {step === 'result' && assessment && selectedCountry && (
         <>
-          <div className="flex items-center gap-3 mb-6">
-            <button onClick={() => setStep('form')} className="text-muted-foreground min-h-[44px] min-w-[44px] flex items-center">
-              <ArrowLeft size={20} />
+          {/* Compact gradient header */}
+          <div className="relative -mx-4 h-32 bg-gradient-to-br from-primary to-primary/70 overflow-hidden rounded-b-3xl">
+            <button
+              onClick={() => setStep('form')}
+              className="absolute top-3 left-4 w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white"
+            >
+              <ArrowLeft size={18} />
             </button>
-            <div>
-              <h1 className="text-xl font-bold">
-                {countryFlag(countryCode)} {selectedCountry.name}
-              </h1>
-              <p className="text-sm text-muted-foreground capitalize">
-                {formatDateRange(startDate, endDate)} · {purpose}
-              </p>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-6xl">{countryFlag(countryCode)}</span>
             </div>
+          </div>
+
+          {/* Trip summary */}
+          <div className="mt-5 mb-5">
+            <h1 className="text-2xl font-bold">{selectedCountry.name}</h1>
+            <p className="text-sm text-muted-foreground mt-1 capitalize">
+              {formatDateRange(startDate, endDate)} · {purpose} · {durationDays(startDate, endDate)} days
+            </p>
           </div>
 
           {historical && (
@@ -232,48 +239,38 @@ export function AddTripForm({ passports }: Props) {
           )}
 
           {assessment.requirements.length > 0 && (
-            <div className="flex flex-col gap-4 mb-6">
+            <div className="flex flex-col gap-6 mb-6">
               <SectionHeader label="Requirements" />
               {assessment.requirements.map((req, i) => (
-                <div key={i} className="rounded-xl border border-border bg-card">
-                  {/* Header */}
-                  <div className="px-4 pt-4 pb-3">
-                    <p className="font-semibold">{req.name}</p>
-                    <p className="text-sm text-muted-foreground mt-1">{req.why_it_applies}</p>
-                    {req.time_required_days > 0 && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Allow {req.time_required_days} days · start by {latestStartLabel(startDate, req.time_required_days)}
-                      </p>
+                <div key={i} className="flex flex-col gap-3">
+
+                  {/* Requirement name + description */}
+                  <div className="rounded-xl border border-border bg-card px-4 py-4">
+                    <p className="font-semibold text-base">{req.name}</p>
+                    {req.why_it_applies && (
+                      <p className="text-sm text-muted-foreground mt-1">{req.why_it_applies}</p>
                     )}
                   </div>
 
-                  {/* Steps */}
-                  {req.sub_tasks.length > 0 && (
-                    <div className="border-t border-border px-4 py-3 flex flex-col gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Steps</p>
-                      {req.sub_tasks.map((task, j) => (
-                        <div key={j} className="flex items-center gap-2">
-                          <div className={cn('w-3.5 h-3.5 rounded-full shrink-0', task.type === 'automated' ? 'border border-muted-foreground/40' : 'border-2 border-border')} />
-                          <span className="text-sm flex-1">{task.name}</span>
-                          {task.type === 'automated' && (
-                            <span className="text-xs text-muted-foreground shrink-0">Auto</span>
-                          )}
-                          {task.type === 'generatable' && (
-                            <span className="text-xs text-muted-foreground shrink-0">AI-generated</span>
-                          )}
-                          {(task.type === 'primary_action' || task.type === 'third_party') && (
-                            <span className="text-xs text-muted-foreground shrink-0">Apply</span>
-                          )}
-                        </div>
-                      ))}
+                  {/* Processing time info */}
+                  {req.time_required_days > 0 && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-xl border border-border bg-card px-3 py-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Processing time</p>
+                        <p className="font-semibold text-sm">{req.time_required_days} days</p>
+                      </div>
+                      <div className="rounded-xl border border-border bg-card px-3 py-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Start by</p>
+                        <p className="font-semibold text-sm">{latestStartLabel(startDate, req.time_required_days)}</p>
+                      </div>
                     </div>
                   )}
 
-                  {/* What you need */}
+                  {/* Documents required */}
                   {req.what_you_need && req.what_you_need.length > 0 && (
-                    <div className="border-t border-border px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">What you need</p>
-                      <ul className="flex flex-col gap-1">
+                    <div className="rounded-xl border border-border bg-card px-4 py-4">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Documents required</p>
+                      <ul className="flex flex-col gap-2">
                         {req.what_you_need.map((item, j) => (
                           <li key={j} className="flex items-start gap-2 text-sm">
                             <span className="text-muted-foreground shrink-0 mt-0.5">·</span>
@@ -283,6 +280,33 @@ export function AddTripForm({ passports }: Props) {
                       </ul>
                     </div>
                   )}
+
+                  {/* Steps */}
+                  {req.sub_tasks.length > 0 && (
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                      <div className="px-4 pt-3 pb-1">
+                        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Steps</p>
+                      </div>
+                      <div className="divide-y divide-border px-4 pb-2">
+                        {req.sub_tasks.map((task, j) => (
+                          <div key={j} className="flex items-center gap-2 py-2.5">
+                            <div className={cn('w-3.5 h-3.5 rounded-full shrink-0', task.type === 'automated' ? 'border border-muted-foreground/40' : 'border-2 border-border')} />
+                            <span className="text-sm flex-1">{task.name}</span>
+                            {task.type === 'automated' && (
+                              <span className="text-xs text-muted-foreground shrink-0">Auto</span>
+                            )}
+                            {task.type === 'generatable' && (
+                              <span className="text-xs text-muted-foreground shrink-0">AI-generated</span>
+                            )}
+                            {(task.type === 'primary_action' || task.type === 'third_party') && (
+                              <span className="text-xs text-muted-foreground shrink-0">Apply</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               ))}
             </div>
@@ -300,22 +324,24 @@ export function AddTripForm({ passports }: Props) {
             </div>
           )}
 
-          <form action={createTrip}>
-            <input type="hidden" name="destination_country" value={selectedCountry.name} />
-            <input type="hidden" name="destination_country_code" value={countryCode} />
-            <input type="hidden" name="start_date" value={startDate} />
-            <input type="hidden" name="end_date" value={endDate} />
-            <input type="hidden" name="purpose" value={purpose} />
-            <input type="hidden" name="passport_id" value={passportId} />
-            <input type="hidden" name="is_historical" value={String(historical)} />
-            <input type="hidden" name="assessment_result" value={assessment.result} />
-            <button
-              type="submit"
-              className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm"
-            >
-              {historical ? 'Save trip' : 'Add this trip'}
-            </button>
-          </form>
+          <div className="sticky bottom-20 mt-2">
+            <form action={createTrip}>
+              <input type="hidden" name="destination_country" value={selectedCountry.name} />
+              <input type="hidden" name="destination_country_code" value={countryCode} />
+              <input type="hidden" name="start_date" value={startDate} />
+              <input type="hidden" name="end_date" value={endDate} />
+              <input type="hidden" name="purpose" value={purpose} />
+              <input type="hidden" name="passport_id" value={passportId} />
+              <input type="hidden" name="is_historical" value={String(historical)} />
+              <input type="hidden" name="assessment_result" value={assessment.result} />
+              <button
+                type="submit"
+                className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm shadow-lg"
+              >
+                {historical ? 'Save trip' : 'Add this trip'}
+              </button>
+            </form>
+          </div>
         </>
       )}
     </div>

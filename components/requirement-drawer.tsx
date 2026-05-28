@@ -738,8 +738,8 @@ function CenturoConfirmModal({ requirementName, onConfirm, onDismiss, isPending,
 }) {
   return (
     <>
-      <div className="fixed inset-0 z-[60] bg-black/50" onClick={onDismiss} />
-      <div className="fixed inset-x-0 bottom-0 z-[61] bg-card rounded-t-2xl px-5 pt-5 pb-10">
+      <div className="fixed inset-0 z-[70] bg-black/50" onClick={onDismiss} />
+      <div className="fixed inset-x-0 bottom-0 z-[71] bg-card rounded-t-2xl px-5 pt-5 pb-10">
         <div className="flex justify-center mb-4">
           <div className="w-8 h-1 rounded-full bg-border" />
         </div>
@@ -803,14 +803,14 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/50 z-[59]" onClick={onClose} />
 
-      <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-background max-h-[85vh] overflow-y-auto">
+      <div className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background max-h-[85vh] overflow-y-auto">
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-8 h-1 rounded-full bg-border" />
         </div>
 
-        <div className="px-5 pb-10 pt-2">
+        <div className="px-5 pb-8 pt-2">
 
           {/* Header */}
           <div className="flex items-start justify-between mb-1">
@@ -835,12 +835,12 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
           {/* Timeline */}
           {showTimeline && (
             <div className="grid grid-cols-2 gap-2 mb-5">
-              <div className="bg-muted rounded-xl px-3 py-3">
+              <div className="bg-card border border-border rounded-xl px-3 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Time required</p>
                 <p className="font-semibold text-sm">{requirement.time_required_days} days</p>
               </div>
               {startByDate && (
-                <div className="bg-muted rounded-xl px-3 py-3">
+                <div className="bg-card border border-border rounded-xl px-3 py-3">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Start by</p>
                   <p className="font-semibold text-sm">{startByDate}</p>
                 </div>
@@ -858,8 +858,8 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
 
           {/* Documents Required */}
           {requirement.what_you_need && requirement.what_you_need.length > 0 && (
-            <div className="mb-5">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+            <div className="rounded-xl border border-border bg-card px-4 py-4 mb-5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
                 Documents Required
               </h3>
               <ul className="flex flex-col gap-1.5">
@@ -875,7 +875,7 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
 
           {/* Guidance */}
           {requirement.guidance && (
-            <div className="mb-5">
+            <div className="rounded-xl border border-border bg-card px-4 py-4 mb-5">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
                 Guidance
               </h3>
@@ -885,10 +885,10 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
                   href={requirement.external_link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
+                  className="mt-4 w-full flex items-center justify-center gap-2 h-11 rounded-xl border border-primary text-primary font-semibold text-sm"
                 >
                   Apply at official portal
-                  <ExternalLink size={13} />
+                  <ExternalLink size={14} />
                 </a>
               )}
             </div>
@@ -924,13 +924,13 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
                     <button
                       onClick={() => setShowModal(true)}
                       disabled={isPending}
-                      className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border border-border bg-muted text-left disabled:opacity-60 active:bg-border/60 transition-colors duration-100"
+                      className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border border-primary/30 bg-primary/5 text-left disabled:opacity-60 active:bg-primary/10 transition-colors duration-100"
                     >
                       <div>
-                        <p className="text-sm font-semibold">Initiate with Centuro</p>
+                        <p className="text-sm font-semibold text-primary">Initiate with Centuro</p>
                         <p className="text-xs text-muted-foreground mt-0.5">Full end-to-end management</p>
                       </div>
-                      <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+                      <ChevronRight size={16} className="text-primary/60 shrink-0" />
                     </button>
                   )}
                 </div>
@@ -938,9 +938,11 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
 
               {/* Steps */}
               {sortedTasks.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Steps</h3>
-                  <div className="divide-y divide-border/60">
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                  <div className="px-4 pt-3 pb-1">
+                    <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Steps</h3>
+                  </div>
+                  <div className="divide-y divide-border/60 px-4">
                     {sortedTasks.map((task, i) => {
                       const stepNumber = i + 1
                       if (task.type === 'automated') {

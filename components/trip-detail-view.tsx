@@ -4,7 +4,7 @@ import { useState, useTransition, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { CheckCircle, AlertTriangle, ArrowLeft } from 'lucide-react'
-import { countryImageUrl } from '@/lib/countries'
+import { countryFlag } from '@/lib/countries'
 import { runAssessment } from '@/lib/assessment/stub'
 import { activateTrip } from '@/app/actions/trips'
 import { StatusBadge } from '@/components/status-badge'
@@ -123,24 +123,19 @@ export function TripDetailView({ trip }: Props) {
   // ── Shared hero section ──────────────────────────────────────────────────────
   const heroSection = (
     <>
-      {/* Full-bleed destination image (breaks out of parent px-4) */}
-      <div className="relative -mx-4 h-56 bg-muted overflow-hidden rounded-b-3xl">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={countryImageUrl(trip.destination_country)}
-          alt={trip.destination_country}
-          className="w-full h-full object-cover"
-        />
-        {/* Gradient overlay — fades image into content below */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
-        {/* Back button bubble */}
+      {/* Compact gradient header */}
+      <div className="relative -mx-4 h-32 bg-gradient-to-br from-primary to-primary/70 overflow-hidden rounded-b-3xl">
         <Link
           href="/trips"
-          className="absolute top-3 left-4 w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white"
+          className="absolute top-3 left-4 w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white"
         >
           <ArrowLeft size={18} />
         </Link>
-        {/* Status chip overlaid on gradient */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-6xl" role="img" aria-label={trip.destination_country}>
+            {countryFlag(trip.destination_country_code)}
+          </span>
+        </div>
         {trip.state === 'active' && (
           <div className="absolute bottom-3 left-4">
             <ComplianceChip status={trip.compliance_status} />
@@ -148,7 +143,7 @@ export function TripDetailView({ trip }: Props) {
         )}
         {trip.state === 'exploratory' && (
           <div className="absolute bottom-3 left-4">
-            <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-card/90 text-muted-foreground shadow-sm">
+            <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-white/20 backdrop-blur-sm text-white shadow-sm">
               Exploratory
             </span>
           </div>
@@ -172,7 +167,7 @@ export function TripDetailView({ trip }: Props) {
         </div>
       </div>
 
-      {/* Purpose + duration + origin (historical trips only) */}
+      {/* Purpose + duration + origin */}
       <p className="text-sm text-muted-foreground capitalize mb-5">
         {purposeLabel} · {duration} day{duration !== 1 ? 's' : ''}
         {trip.origin_country && ` · From ${trip.origin_country}`}
