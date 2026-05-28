@@ -448,12 +448,25 @@ The user's attention should be on active trips first. Exploratory trips are seco
 |---|---|
 | Requirement ID | |
 | Trip ID | Parent trip |
-| Type | Visa / arrival card / letter / registration / etc. |
+| Type | Visa / arrival card / letter / registration / manager_approval / etc. |
 | Is mandatory | Boolean — drives compliance status |
 | Status | Not started / In progress / At Risk / Complete |
 | Time required | Days needed before travel |
 | Latest start date | Calculated: travel date − time required |
 | Completed date | When evidence was uploaded |
+| Approval state | `unsent` / `pending` / `approved` / `not_approved` — for `manager_approval` type only |
+| Approver name | Name of the selected approver — for `manager_approval` type only |
+| Approval log | Array of log entries (see below) — for `manager_approval` type only |
+
+### Approval Log Entry
+
+| Field | Description |
+|---|---|
+| State | The approval state transitioned to |
+| Actor | Name of the person who made the change |
+| Timestamp | When the change occurred |
+
+The log is append-only. Reversals add a new entry rather than overwriting.
 
 ### Sub-task
 
@@ -535,6 +548,7 @@ The PoC validates the core compliance flow and travel history accumulation. It i
 | Assessment | Stubbed — returns a pre-configured result for a small set of test destinations. Assessment engine is not built. Result is shown as a neutral process preview in the exploratory state — no urgency, no action buttons. |
 | Trip activation | The gate between assessment and compliance tracking. Exploratory → Active. Checklist generated from stubbed assessment result. Urgency and deadline calculations begin only after activation. |
 | Compliance checklist | Mandatory requirements with sub-tasks. Automated verification (passport validity). Primary action with upload gate. |
+| Manager approval | All trips include a manager approval requirement. Approver selected from stubbed name list. Send for approval → 3-second pending state → auto-approved with log entry. Trip cannot reach compliant without approval. |
 | AI document generation | CTA present on generatable document sub-tasks. Engine not built — button is visible but non-functional or returns a placeholder. |
 | Evidence upload | User uploads a file. Stored against the requirement. Document name used as the file label. No parsing. |
 | Managed service cases | User can initiate a Centuro-managed case from a primary action sub-task. Case record created, at_risk suppressed, case detail view with milestone timeline. See §16. |
@@ -637,7 +651,107 @@ Travel Wallet is an extension of the Centuro platform. In production, the `cases
 
 ---
 
-## 17. Decisions & Open Questions
+## 17. Manager Approval
+
+### 17.1 Overview
+
+For clients operating in corporate or enterprise contexts, trips may require internal sign-off before travel is approved. Manager approval is modelled as a **company-level compliance requirement** — it carries the same weight as a government-mandated visa or registration. A trip cannot reach "ready to travel" status without it.
+
+This is distinct from immigration compliance but equal in treatment within the trip checklist.
+
+### 17.2 Requirement Model
+
+Manager approval appears as a Layer 1 requirement on every trip where it is configured. It is mandatory — it blocks the trip's compliance status until it reaches `approved`.
+
+Unlike other requirements, it has no sub-tasks. Its state machine is self-contained.
+
+**Approval states:**
+
+| State | Meaning |
+|---|---|
+| `unsent` | No request sent. Approver not yet selected. |
+| `pending` | Request sent. Awaiting manager response. |
+| `approved` | Manager has approved. Requirement complete. |
+| `not_approved` | Manager has declined. Trip blocked. |
+
+All state transitions are logged with a timestamp and actor. Only the approver can change the state after the request is sent. The trip owner can send the initial request but cannot modify the state after submission.
+
+### 17.3 Trip View — Requirement Card
+
+The approval requirement card in the trip checklist shows a state-specific CTA:
+
+| Approval state | Card display |
+|---|---|
+| `unsent` | "Send for approval" button |
+| `pending` | "Pending approval" — no action available |
+| `approved` | Ticked — complete |
+| `not_approved` | Blocked — "Not approved" indicator |
+
+### 17.4 Requirement Drawer
+
+Tapping the card opens the approval drawer. Content varies by state:
+
+**Unsent:** Manager dropdown (select approver from org user list) + "Send for approval" button.
+
+**Pending:** "Waiting for approval from [name]" message. No actions available to the trip owner.
+
+**Approved:** Audit log showing approver name, action, and timestamp.
+
+**Not approved:** Audit log entry showing when and by whom it was declined. State can only be reversed by the approver.
+
+### 17.5 Client Configuration
+
+Whether manager approval is required is configured at the client level. Configuration options in production:
+- All trips require approval
+- Trips to specified countries require approval
+- Trips above a defined risk level require approval
+
+This is managed by the client admin — not visible to or configurable by the traveller.
+
+**PoC behaviour:** All trips require manager approval by default. Configuration UI is not built.
+
+### 17.6 PoC Scope
+
+| In scope | Detail |
+|---|---|
+| Approval requirement on all trips | Every trip includes a manager approval requirement by default |
+| Approver selection | Dropdown of stubbed manager names |
+| Simulated approval | Send for approval → 3-second pending state → auto-approved with log entry |
+| Audit log | State transitions logged and displayed in the drawer |
+| Compliance blocking | Trips cannot reach `compliant` without approval |
+| `not_approved` state | Present in data model and UI — not triggered in PoC simulation |
+
+| Out of scope | Reason |
+|---|---|
+| Manager-side view | Interface where a manager sees and acts on pending requests — not built. See §17.7. |
+| Real notification delivery | No email or push notification sent on approval request — deferred. |
+| State change by manager post-decision | Flow for a manager to reverse a prior decision — deferred. See §17.7. |
+| Client admin configuration UI | Config logic described in §17.5 — not built in PoC. |
+| Multi-approver workflows | Single approver per trip. Parallel or sequential chains are a future consideration. |
+
+### 17.7 Placeholder: Manager-Side Flows
+
+The following flows are required for production but are not designed or built for the PoC.
+
+**Pending requests view.** A manager needs to see all trips pending their approval — likely a notification or inbox-style view. Design not started.
+
+**Approval / rejection action.** The manager needs a UI to approve or decline a request, with an optional note. Design not started.
+
+**State reversal.** A manager who has approved or declined needs to be able to change their decision. The audit log captures all changes. Only the original approver (or an admin) can reverse. Design not started.
+
+**Notification mechanism.** When a request is sent, the manager should be notified (email, in-app, or both). Channel and format not defined.
+
+**Approval delegation.** If the designated approver is unavailable, who covers? Delegation rules not defined.
+
+### 17.8 Production Intent
+
+In production, approval configuration is managed at the client level via the Centuro admin console. The approver list is drawn from the client's user directory. Approval actions trigger real-time updates to the trip record and send notifications. The PoC simulates this end state without the infrastructure.
+
+The approval model is designed to extend: future approval types (financial sign-off, legal review, risk team clearance) follow the same pattern with a configurable approver type per client.
+
+---
+
+## 18. Decisions & Open Questions
 
 **Resolved:**
 
@@ -656,3 +770,5 @@ Travel Wallet is an extension of the Centuro platform. In production, the `cases
 | What is the monetisation model? | Free vs. paid; which features sit behind a paywall |
 | How does the product handle countries where entry requirements change frequently? | Assessment accuracy and liability — does the product disclaim real-time accuracy? |
 | Can a user add trip members (e.g. travelling with a partner or colleague) or is this always strictly individual? | Scope question for v1 |
+| How does the manager-side approval flow work at full build? | Manager view, notification delivery, and state reversal UI are all undesigned — see §17.7 |
+| How is the approver list sourced in production? | PoC uses stubbed names; production needs to draw from the client's user directory — integration point undefined |

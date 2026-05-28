@@ -4,19 +4,22 @@ import { useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
   X, CheckCircle, ExternalLink, Upload, FileText, ChevronRight,
-  Briefcase, ArrowRight, Download, AlertTriangle, Loader2,
+  Briefcase, ArrowRight, Download, AlertTriangle, Loader2, Clock,
 } from 'lucide-react'
 import {
   uploadEvidence,
   markApplicationSubmitted,
   generateLetter,
   uploadSignedLetter,
+  sendManagerApproval,
+  resolveManagerApproval,
 } from '@/app/actions/trips'
 import { initiateCase } from '@/app/actions/cases'
 import { PrimaryButton } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
 import type { RequirementRow } from '@/lib/db-types'
-import type { RequirementStatus, TravelCase, SubTask } from '@/lib/types'
+import type { RequirementStatus, TravelCase, SubTask, ApprovalLogEntry } from '@/lib/types'
+import { STUB_MANAGERS as MANAGERS } from '@/lib/types'
 
 interface Props {
   requirement: RequirementRow
@@ -563,6 +566,170 @@ function PrimaryActionStep({ task, stepNumber, isManaged, reqComplete, tripId, r
   )
 }
 
+// ── Manager approval drawer body ──────────────────────────────────────────────
+
+function formatLogDate(isoString: string): string {
+  return new Date(isoString).toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+const APPROVAL_STATE_LABELS: Record<string, string> = {
+  unsent: 'Not sent',
+  pending: 'Pending',
+  approved: 'Approved',
+  not_approved: 'Not approved',
+}
+
+function ApprovalLogList({ entries }: { entries: ApprovalLogEntry[] }) {
+  return (
+    <div className="mt-4 space-y-2">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Approval log</h3>
+      {entries.map((entry, i) => (
+        <div key={i} className="flex items-start gap-2.5 py-2 border-t border-border/60 first:border-t-0">
+          <CheckCircle size={13} className="text-status-compliant shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold">{APPROVAL_STATE_LABELS[entry.state] ?? entry.state}</p>
+            <p className="text-xs text-muted-foreground">{entry.actor} · {formatLogDate(entry.timestamp)}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ApprovalDrawerBody({
+  requirement,
+  tripId,
+  onClose,
+}: {
+  requirement: RequirementRow
+  tripId: string
+  onClose: () => void
+}) {
+  const [selectedManager, setSelectedManager] = useState('')
+  const [isSending, setIsSending] = useState(false)
+  const [localState, setLocalState] = useState<{
+    approval_state: string
+    approver_name: string | null
+    approval_log: ApprovalLogEntry[]
+  }>({
+    approval_state: requirement.approval_state ?? 'unsent',
+    approver_name: requirement.approver_name ?? null,
+    approval_log: requirement.approval_log ?? [],
+  })
+
+  async function handleSend() {
+    if (!selectedManager || isSending) return
+    setIsSending(true)
+
+    const fd = new FormData()
+    fd.append('requirementId', requirement.id)
+    fd.append('tripId', tripId)
+    fd.append('approverName', selectedManager)
+
+    setLocalState(prev => ({ ...prev, approval_state: 'pending', approver_name: selectedManager }))
+    await sendManagerApproval(fd)
+
+    await new Promise<void>(resolve => setTimeout(resolve, 3000))
+
+    const timestamp = new Date().toISOString()
+    const fd2 = new FormData()
+    fd2.append('requirementId', requirement.id)
+    fd2.append('tripId', tripId)
+    fd2.append('approverName', selectedManager)
+    await resolveManagerApproval(fd2)
+
+    setLocalState({
+      approval_state: 'approved',
+      approver_name: selectedManager,
+      approval_log: [{ state: 'approved', actor: selectedManager, timestamp }],
+    })
+    setIsSending(false)
+  }
+
+  const approvalState = localState.approval_state
+  const approverName = localState.approver_name
+  const approvalLog = localState.approval_log
+
+  if (approvalState === 'unsent') {
+    return (
+      <div className="mt-2">
+        {requirement.why_it_applies && (
+          <p className="text-sm text-muted-foreground mb-5">{requirement.why_it_applies}</p>
+        )}
+        <div className="mb-4">
+          <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground block mb-1.5">
+            Select approver
+          </label>
+          <select
+            value={selectedManager}
+            onChange={e => setSelectedManager(e.target.value)}
+            className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Choose a manager…</option>
+            {MANAGERS.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </div>
+        <PrimaryButton onClick={handleSend} disabled={!selectedManager || isSending} loading={isSending}>
+          {isSending ? 'Sending…' : 'Send for approval'}
+        </PrimaryButton>
+      </div>
+    )
+  }
+
+  if (approvalState === 'pending') {
+    return (
+      <div className="mt-2">
+        <div className="flex items-start gap-3 px-4 py-4 rounded-xl bg-status-incomplete-bg">
+          <Clock size={16} className="text-status-incomplete shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-status-incomplete">Waiting for approval from {approverName}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Request sent — your manager will review and approve your trip.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (approvalState === 'approved') {
+    return (
+      <div className="mt-2">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-status-compliant-bg">
+          <CheckCircle size={16} className="text-status-compliant shrink-0" />
+          <p className="text-sm font-semibold text-status-compliant">Approved by {approverName}</p>
+        </div>
+        {approvalLog.length > 0 && <ApprovalLogList entries={approvalLog} />}
+      </div>
+    )
+  }
+
+  if (approvalState === 'not_approved') {
+    return (
+      <div className="mt-2">
+        <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-status-at-risk-bg">
+          <AlertTriangle size={16} className="text-status-at-risk shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-status-at-risk">Not approved</p>
+            {approverName && (
+              <p className="text-xs text-muted-foreground mt-0.5">Contact {approverName} to discuss.</p>
+            )}
+          </div>
+        </div>
+        {approvalLog.length > 0 && <ApprovalLogList entries={approvalLog} />}
+      </div>
+    )
+  }
+
+  return null
+}
+
 // ── Centuro confirmation modal ────────────────────────────────────────────────
 
 function CenturoConfirmModal({ requirementName, onConfirm, onDismiss, isPending, error }: {
@@ -727,112 +894,119 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
             </div>
           )}
 
-          {/* Centuro CTA or managed banner */}
-          {(isManaged || hasManualSteps) && (
-            <div className="mb-5">
-              {isManaged ? (
-                <div className="space-y-3">
-                  <div className="rounded-xl border border-border bg-muted px-4 py-3 flex items-center gap-3">
-                    <Briefcase size={15} className="text-muted-foreground shrink-0" />
-                    <p className="text-sm font-medium">
-                      Managed by Centuro
-                      {travelCase?.initiated_at && (
-                        <span className="text-muted-foreground font-normal">
-                          {' · Initiated '}
-                          {new Date(travelCase.initiated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                        </span>
+          {/* Manager approval — completely different body */}
+          {requirement.type === 'manager_approval' ? (
+            <ApprovalDrawerBody requirement={requirement} tripId={tripId} onClose={onClose} />
+          ) : (
+            <>
+              {/* Centuro CTA or managed banner */}
+              {(isManaged || hasManualSteps) && (
+                <div className="mb-5">
+                  {isManaged ? (
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-border bg-muted px-4 py-3 flex items-center gap-3">
+                        <Briefcase size={15} className="text-muted-foreground shrink-0" />
+                        <p className="text-sm font-medium">
+                          Managed by Centuro
+                          {travelCase?.initiated_at && (
+                            <span className="text-muted-foreground font-normal">
+                              {' · Initiated '}
+                              {new Date(travelCase.initiated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      {travelCase && (
+                        <CaseSummaryCard travelCase={travelCase} tripId={tripId} onClose={onClose} />
                       )}
-                    </p>
-                  </div>
-                  {travelCase && (
-                    <CaseSummaryCard travelCase={travelCase} tripId={tripId} onClose={onClose} />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowModal(true)}
+                      disabled={isPending}
+                      className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border border-border bg-muted text-left disabled:opacity-60 active:bg-border/60 transition-colors duration-100"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold">Initiate with Centuro</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Full end-to-end management</p>
+                      </div>
+                      <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+                    </button>
                   )}
                 </div>
-              ) : (
-                <button
-                  onClick={() => setShowModal(true)}
-                  disabled={isPending}
-                  className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border border-border bg-muted text-left disabled:opacity-60 active:bg-border/60 transition-colors duration-100"
-                >
-                  <div>
-                    <p className="text-sm font-semibold">Initiate with Centuro</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Full end-to-end management</p>
-                  </div>
-                  <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-                </button>
               )}
-            </div>
-          )}
 
-          {/* Steps */}
-          {sortedTasks.length > 0 && (
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Steps</h3>
-              <div className="divide-y divide-border/60">
-                {sortedTasks.map((task, i) => {
-                  const stepNumber = i + 1
-                  if (task.type === 'automated') {
-                    return <AutomatedStep key={task.id} task={task} stepNumber={stepNumber} reqComplete={reqComplete} />
-                  }
-                  if (task.type === 'generatable') {
-                    return (
-                      <GeneratableStep
-                        key={task.id}
-                        task={task}
-                        stepNumber={stepNumber}
-                        isManaged={isManaged}
-                        reqComplete={reqComplete}
-                        tripId={tripId}
-                        requirementId={requirement.id}
-                      />
-                    )
-                  }
-                  if (task.type === 'third_party') {
-                    return (
-                      <ThirdPartyStep
-                        key={task.id}
-                        task={task}
-                        stepNumber={stepNumber}
-                        isManaged={isManaged}
-                        reqComplete={reqComplete}
-                        tripId={tripId}
-                        requirementId={requirement.id}
-                        externalLink={requirement.external_link}
-                      />
-                    )
-                  }
-                  if (task.type === 'informational') {
-                    return <InformationalStep key={task.id} task={task} stepNumber={stepNumber} reqComplete={reqComplete} />
-                  }
-                  if (task.type === 'primary_action') {
-                    return (
-                      <PrimaryActionStep
-                        key={task.id}
-                        task={task}
-                        stepNumber={stepNumber}
-                        isManaged={isManaged}
-                        reqComplete={reqComplete}
-                        tripId={tripId}
-                        requirementId={requirement.id}
-                        requirementName={requirement.name}
-                        requirementType={requirement.type}
-                        documents={requirement.documents}
-                        onClose={onClose}
-                      />
-                    )
-                  }
-                  return null
-                })}
-              </div>
-            </div>
-          )}
+              {/* Steps */}
+              {sortedTasks.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Steps</h3>
+                  <div className="divide-y divide-border/60">
+                    {sortedTasks.map((task, i) => {
+                      const stepNumber = i + 1
+                      if (task.type === 'automated') {
+                        return <AutomatedStep key={task.id} task={task} stepNumber={stepNumber} reqComplete={reqComplete} />
+                      }
+                      if (task.type === 'generatable') {
+                        return (
+                          <GeneratableStep
+                            key={task.id}
+                            task={task}
+                            stepNumber={stepNumber}
+                            isManaged={isManaged}
+                            reqComplete={reqComplete}
+                            tripId={tripId}
+                            requirementId={requirement.id}
+                          />
+                        )
+                      }
+                      if (task.type === 'third_party') {
+                        return (
+                          <ThirdPartyStep
+                            key={task.id}
+                            task={task}
+                            stepNumber={stepNumber}
+                            isManaged={isManaged}
+                            reqComplete={reqComplete}
+                            tripId={tripId}
+                            requirementId={requirement.id}
+                            externalLink={requirement.external_link}
+                          />
+                        )
+                      }
+                      if (task.type === 'informational') {
+                        return <InformationalStep key={task.id} task={task} stepNumber={stepNumber} reqComplete={reqComplete} />
+                      }
+                      if (task.type === 'primary_action') {
+                        return (
+                          <PrimaryActionStep
+                            key={task.id}
+                            task={task}
+                            stepNumber={stepNumber}
+                            isManaged={isManaged}
+                            reqComplete={reqComplete}
+                            tripId={tripId}
+                            requirementId={requirement.id}
+                            requirementName={requirement.name}
+                            requirementType={requirement.type}
+                            documents={requirement.documents}
+                            onClose={onClose}
+                          />
+                        )
+                      }
+                      return null
+                    })}
+                  </div>
+                </div>
+              )}
 
-          {/* Completion confirmation */}
-          {reqComplete && (
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-status-compliant-bg mt-5">
-              <CheckCircle size={16} className="text-status-compliant shrink-0" />
-              <p className="text-sm font-medium text-status-compliant">Requirement complete</p>
-            </div>
+              {/* Completion confirmation */}
+              {reqComplete && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-status-compliant-bg mt-5">
+                  <CheckCircle size={16} className="text-status-compliant shrink-0" />
+                  <p className="text-sm font-medium text-status-compliant">Requirement complete</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

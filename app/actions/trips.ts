@@ -115,6 +115,24 @@ export async function activateTrip(formData: FormData) {
     }
   }
 
+  // Always insert a manager approval requirement
+  await supabase.from('requirements').insert({
+    trip_id: tripId,
+    name: 'Manager Approval',
+    type: 'manager_approval',
+    is_mandatory: true,
+    status: 'not_started',
+    time_required_days: 0,
+    latest_start_date: null,
+    why_it_applies: 'Your organisation requires manager sign-off before travel can proceed.',
+    guidance: 'Select your manager and send a request for approval. Your trip cannot be marked compliant until this is approved.',
+    external_link: null,
+    what_you_need: null,
+    approval_state: 'unsent',
+    approver_name: null,
+    approval_log: [],
+  })
+
   const { data: requirements } = await supabase
     .from('requirements')
     .select('*')
@@ -367,6 +385,84 @@ export async function uploadSignedLetter(formData: FormData) {
     .from('sub_tasks')
     .update({ status: 'complete', approval_status: 'signed', evidence_document_id: doc?.id ?? null })
     .eq('id', subTaskId)
+
+  revalidatePath(`/trips/${tripId}`)
+}
+
+export async function sendManagerApproval(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth')
+
+  const requirementId = formData.get('requirementId') as string
+  const tripId = formData.get('tripId') as string
+  const approverName = formData.get('approverName') as string
+
+  await supabase
+    .from('requirements')
+    .update({
+      approval_state: 'pending',
+      approver_name: approverName,
+      status: 'in_progress',
+    })
+    .eq('id', requirementId)
+
+  const { data: allRequirements } = await supabase
+    .from('requirements')
+    .select('*')
+    .eq('trip_id', tripId)
+
+  const newStatus = computeComplianceStatus(allRequirements ?? [])
+  await supabase
+    .from('trips')
+    .update({ compliance_status: newStatus })
+    .eq('id', tripId)
+    .eq('user_id', user.id)
+
+  revalidatePath(`/trips/${tripId}`)
+}
+
+export async function resolveManagerApproval(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth')
+
+  const requirementId = formData.get('requirementId') as string
+  const tripId = formData.get('tripId') as string
+  const approverName = formData.get('approverName') as string
+  const timestamp = new Date().toISOString()
+
+  const logEntry = { state: 'approved', actor: approverName, timestamp }
+
+  const { data: req } = await supabase
+    .from('requirements')
+    .select('approval_log')
+    .eq('id', requirementId)
+    .single()
+
+  const existingLog = Array.isArray(req?.approval_log) ? req.approval_log : []
+
+  await supabase
+    .from('requirements')
+    .update({
+      approval_state: 'approved',
+      status: 'complete',
+      completed_at: timestamp,
+      approval_log: [...existingLog, logEntry],
+    })
+    .eq('id', requirementId)
+
+  const { data: allRequirements } = await supabase
+    .from('requirements')
+    .select('*')
+    .eq('trip_id', tripId)
+
+  const newStatus = computeComplianceStatus(allRequirements ?? [])
+  await supabase
+    .from('trips')
+    .update({ compliance_status: newStatus })
+    .eq('id', tripId)
+    .eq('user_id', user.id)
 
   revalidatePath(`/trips/${tripId}`)
 }

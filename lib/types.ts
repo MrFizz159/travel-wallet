@@ -1,4 +1,19 @@
 export type TripState = 'exploratory' | 'active' | 'completed' | 'cancelled'
+export type ApprovalState = 'unsent' | 'pending' | 'approved' | 'not_approved'
+
+export interface ApprovalLogEntry {
+  state: ApprovalState
+  actor: string
+  timestamp: string
+}
+
+export const STUB_MANAGERS = [
+  'Sarah Chen',
+  'James Mitchell',
+  'Priya Patel',
+  'Tom Walker',
+  'Emma Rodriguez',
+]
 export type ComplianceStatus = 'compliant' | 'incomplete' | 'at_risk'
 export type RequirementStatus = 'not_started' | 'in_progress' | 'at_risk' | 'complete'
 export type SubTaskType = 'automated' | 'generatable' | 'primary_action' | 'third_party' | 'informational'
@@ -76,6 +91,9 @@ export interface Requirement {
   what_you_need: string[] | null
   has_active_case: boolean
   created_at: string
+  approval_state?: ApprovalState | null
+  approver_name?: string | null
+  approval_log?: ApprovalLogEntry[]
 }
 
 export interface SubTask {
