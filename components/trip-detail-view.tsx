@@ -3,7 +3,7 @@
 import { useState, useTransition, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { CheckCircle, AlertTriangle, ArrowLeft } from 'lucide-react'
+import { CheckCircle, AlertTriangle, ArrowLeft, MoreVertical } from 'lucide-react'
 import { countryFlag } from '@/lib/countries'
 import { runAssessment } from '@/lib/assessment/stub'
 import { activateTrip } from '@/app/actions/trips'
@@ -122,57 +122,76 @@ export function TripDetailView({ trip }: Props) {
 
   // ── Shared hero section ──────────────────────────────────────────────────────
   const heroSection = (
-    <>
-      {/* Compact gradient header */}
-      <div className="relative -mx-4 h-32 bg-gradient-to-br from-primary to-primary/70 overflow-hidden rounded-b-3xl">
-        <Link
-          href="/trips"
-          className="absolute top-3 left-4 w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white"
-        >
-          <ArrowLeft size={18} />
-        </Link>
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className="text-6xl" role="img" aria-label={trip.destination_country}>
+    <div className="relative -mx-4 bg-[#2D1A5C] overflow-hidden rounded-b-3xl mb-5">
+      {/* Dot texture */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: 'radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)',
+          backgroundSize: '14px 14px',
+        }}
+      />
+
+      <div className="relative z-10 flex flex-col gap-2.5 px-4 py-3">
+        {/* Row 1: back + overflow */}
+        <div className="flex items-center justify-between">
+          <Link
+            href="/trips"
+            className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center text-white"
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <button className="w-10 h-10 flex items-center justify-center text-white/40" aria-label="More options">
+            <MoreVertical size={18} />
+          </button>
+        </div>
+
+        {/* Row 2: flag + country name + status badge */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className="text-lg leading-none w-7 h-5 rounded-sm border border-white/25 overflow-hidden inline-flex items-center justify-center shrink-0"
+            role="img"
+            aria-label={trip.destination_country}
+          >
             {countryFlag(trip.destination_country_code)}
           </span>
-        </div>
-        {trip.state === 'active' && (
-          <div className="absolute bottom-3 left-4">
-            <ComplianceChip status={trip.compliance_status} />
-          </div>
-        )}
-        {trip.state === 'exploratory' && (
-          <div className="absolute bottom-3 left-4">
-            <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-white/20 backdrop-blur-sm text-white shadow-sm">
+          <span className="text-[22px] font-extrabold text-white leading-tight">
+            {trip.destination_country}
+          </span>
+          {trip.state === 'active' && <ComplianceChip status={trip.compliance_status} />}
+          {trip.state === 'exploratory' && (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/20 text-white">
               Exploratory
             </span>
-          </div>
-        )}
-      </div>
-
-      {/* Destination header */}
-      <h1 className="text-3xl font-extrabold leading-tight mt-4 mb-3">
-        {trip.destination_country}
-      </h1>
-
-      {/* Date boxes — Arrival / Departure side-by-side */}
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <div className="bg-card border border-border rounded-xl px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Arrival</p>
-          <p className="font-semibold text-sm">{formatDate(trip.start_date)}</p>
+          )}
+          {trip.state === 'completed' && (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/20 text-white">
+              Completed
+            </span>
+          )}
+          {trip.state === 'cancelled' && (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/15 text-white/70">
+              Cancelled
+            </span>
+          )}
         </div>
-        <div className="bg-card border border-border rounded-xl px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Departure</p>
-          <p className="font-semibold text-sm">{formatDate(trip.end_date)}</p>
+
+        {/* Row 3: date chips + trip meta */}
+        <div className="flex items-center gap-1.5 flex-wrap pb-1">
+          <span className="bg-white/15 rounded-md px-2 py-1 text-xs font-semibold text-white">
+            {formatDate(trip.start_date)}
+          </span>
+          <span className="text-white/40 text-xs">›</span>
+          <span className="bg-white/15 rounded-md px-2 py-1 text-xs font-semibold text-white">
+            {formatDate(trip.end_date)}
+          </span>
+          <div className="w-px h-3.5 bg-white/20 mx-0.5 shrink-0" />
+          <span className="text-xs text-white/60">
+            {purposeLabel} · {duration} day{duration !== 1 ? 's' : ''}
+          </span>
         </div>
       </div>
-
-      {/* Purpose + duration + origin */}
-      <p className="text-sm text-muted-foreground capitalize mb-5">
-        {purposeLabel} · {duration} day{duration !== 1 ? 's' : ''}
-        {trip.origin_country && ` · From ${trip.origin_country}`}
-      </p>
-    </>
+    </div>
   )
 
   // ── Exploratory ─────────────────────────────────────────────────────────────
