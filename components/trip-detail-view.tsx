@@ -131,7 +131,7 @@ export function TripDetailView({ trip }: Props) {
         >
           <ArrowLeft size={18} />
         </Link>
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <span className="text-6xl" role="img" aria-label={trip.destination_country}>
             {countryFlag(trip.destination_country_code)}
           </span>

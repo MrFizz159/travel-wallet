@@ -210,7 +210,7 @@ export function AddTripForm({ passports }: Props) {
             >
               <ArrowLeft size={18} />
             </button>
-            <div className="absolute inset-0 flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <span className="text-6xl">{countryFlag(countryCode)}</span>
             </div>
           </div>
