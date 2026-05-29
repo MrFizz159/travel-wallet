@@ -16,9 +16,8 @@ export default async function WalletPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: passports }, { count: completedTripCount }, { data: completedTrips }, { data: authorizations }] = await Promise.all([
+  const [{ data: passports }, { data: completedTrips }, { data: authorizations }] = await Promise.all([
     supabase.from('passports').select('*').eq('user_id', user!.id).order('is_primary', { ascending: false }),
-    supabase.from('trips').select('id', { count: 'exact', head: true }).eq('user_id', user!.id).eq('state', 'completed'),
     supabase.from('trips').select('destination_country_code').eq('user_id', user!.id).eq('state', 'completed'),
     supabase.from('authorizations').select('*').eq('user_id', user!.id).order('expiry_date', { ascending: true }),
   ])
@@ -28,7 +27,9 @@ export default async function WalletPage() {
   const primary = passportList.find(p => p.is_primary) ?? passportList[0] ?? null
   const expiryMonths = primary ? monthsUntilExpiry(primary.expiry_date) : null
   const expiryWarning = expiryMonths !== null && expiryMonths <= 6
-  const countriesVisited = new Set((completedTrips ?? []).map((t: { destination_country_code: string }) => t.destination_country_code)).size
+  const completedTripList = completedTrips ?? []
+  const completedTripCount = completedTripList.length
+  const countriesVisited = new Set(completedTripList.map((t: { destination_country_code: string }) => t.destination_country_code)).size
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-6">

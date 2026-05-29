@@ -13,6 +13,9 @@ export default async function TripDetailPage({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  // cases is only consumed in the active state (RequirementDrawer). Making this
+  // conditional would require a two-round-trip waterfall (fetch state, then
+  // conditionally fetch cases), so the join is kept unconditional.
   const { data: trip, error: tripError } = await supabase
     .from('trips')
     .select(`

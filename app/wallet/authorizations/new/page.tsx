@@ -16,11 +16,11 @@ export default async function AddAuthorizationPage() {
 
   const { data: passports } = await supabase
     .from('passports')
-    .select('*')
+    .select('id, issuing_country, passport_number, is_primary')
     .eq('user_id', user.id)
     .order('is_primary', { ascending: false })
 
-  const passportList = (passports ?? []) as Passport[]
+  const passportList = (passports ?? []) as Pick<Passport, 'id' | 'issuing_country' | 'passport_number' | 'is_primary'>[]
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-6">
