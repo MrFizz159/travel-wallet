@@ -1,6 +1,8 @@
 'use client'
 
+import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { Loader2 } from 'lucide-react'
 import { countryFlagUrl } from '@/lib/countries'
 import { activateTrip } from '@/app/actions/trips'
 import type { Trip } from '@/lib/types'
@@ -27,8 +29,18 @@ function durationDays(start: string, end: string) {
 
 export function ExploratoryTripCard({ trip }: Props) {
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const duration = durationDays(trip.start_date, trip.end_date)
   const purposeLabel = trip.purpose.charAt(0).toUpperCase() + trip.purpose.slice(1)
+
+  function handleActivate(e: React.MouseEvent) {
+    e.stopPropagation()
+    const fd = new FormData()
+    fd.append('tripId', trip.id)
+    startTransition(async () => {
+      await activateTrip(fd)
+    })
+  }
 
   return (
     <div
@@ -54,19 +66,21 @@ export function ExploratoryTripCard({ trip }: Props) {
           </p>
         </div>
 
-        <form
-          action={activateTrip}
-          onClick={e => e.stopPropagation()}
-          className="shrink-0"
+        <button
+          type="button"
+          onClick={handleActivate}
+          disabled={isPending}
+          className="shrink-0 px-3 py-2 rounded-lg bg-foreground text-background text-xs font-semibold min-h-[44px] flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <input type="hidden" name="tripId" value={trip.id} />
-          <button
-            type="submit"
-            className="px-3 py-2 rounded-lg bg-foreground text-background text-xs font-semibold min-h-[36px]"
-          >
-            Activate
-          </button>
-        </form>
+          {isPending ? (
+            <>
+              <Loader2 size={12} className="animate-spin" />
+              Activating…
+            </>
+          ) : (
+            'Activate'
+          )}
+        </button>
       </div>
     </div>
   )
