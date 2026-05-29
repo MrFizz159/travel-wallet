@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { computeComplianceStatus } from '@/lib/compliance'
+import { syncComplianceStatus } from './_utils'
 
 function generateCaseReference(): string {
   const year = new Date().getFullYear()
@@ -40,28 +40,18 @@ export async function initiateCase(formData: FormData): Promise<{ caseId: string
 
   if (caseError || !newCase) throw new Error(caseError?.message ?? 'Failed to create case')
 
-  await supabase
-    .from('sub_tasks')
-    .update({ service_mode: 'managed', status: 'case_in_progress', case_id: newCase.id })
-    .eq('id', subTaskId)
+  await Promise.all([
+    supabase
+      .from('sub_tasks')
+      .update({ service_mode: 'managed', status: 'case_in_progress', case_id: newCase.id })
+      .eq('id', subTaskId),
+    supabase
+      .from('requirements')
+      .update({ status: 'in_progress', has_active_case: true })
+      .eq('id', requirementId),
+  ])
 
-  await supabase
-    .from('requirements')
-    .update({ status: 'in_progress', has_active_case: true })
-    .eq('id', requirementId)
-
-  const { data: allRequirements } = await supabase
-    .from('requirements')
-    .select('*')
-    .eq('trip_id', tripId)
-
-  const newStatus = computeComplianceStatus(allRequirements ?? [])
-
-  await supabase
-    .from('trips')
-    .update({ compliance_status: newStatus })
-    .eq('id', tripId)
-    .eq('user_id', user.id)
+  await syncComplianceStatus(supabase, tripId, user.id)
 
   revalidatePath(`/trips/${tripId}`)
 
