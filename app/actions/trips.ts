@@ -70,75 +70,72 @@ export async function activateTrip(formData: FormData) {
 
   const assessment = runAssessment(trip.destination_country_code)
 
-  for (const stubReq of assessment.requirements) {
-    const latestStartDate = stubReq.time_required_days > 0
-      ? subtractDays(trip.start_date, stubReq.time_required_days)
-      : null
+  // Batch insert all assessment requirements in one call
+  const { data: insertedRequirements } = await supabase
+    .from('requirements')
+    .insert(assessment.requirements.map(stubReq => ({
+      trip_id: tripId,
+      name: stubReq.name,
+      type: stubReq.type,
+      is_mandatory: stubReq.is_mandatory,
+      status: 'not_started',
+      time_required_days: stubReq.time_required_days,
+      latest_start_date: stubReq.time_required_days > 0
+        ? subtractDays(trip.start_date, stubReq.time_required_days)
+        : null,
+      why_it_applies: stubReq.why_it_applies,
+      guidance: stubReq.guidance,
+      external_link: stubReq.external_link ?? null,
+      what_you_need: stubReq.what_you_need ?? null,
+    })))
+    .select()
 
-    const { data: req } = await supabase
-      .from('requirements')
-      .insert({
-        trip_id: tripId,
-        name: stubReq.name,
-        type: stubReq.type,
-        is_mandatory: stubReq.is_mandatory,
-        status: 'not_started',
-        time_required_days: stubReq.time_required_days,
-        latest_start_date: latestStartDate,
-        why_it_applies: stubReq.why_it_applies,
-        guidance: stubReq.guidance,
-        external_link: stubReq.external_link ?? null,
-        what_you_need: stubReq.what_you_need ?? null,
-      })
-      .select()
-      .single()
+  if (!insertedRequirements) throw new Error('Failed to insert requirements')
 
-    if (!req) continue
-
-    for (const stubTask of stubReq.sub_tasks) {
-      let taskStatus: 'pending' | 'complete' = 'pending'
-
-      // Automated passport validity: must be valid 6 months beyond return date
-      if (stubTask.type === 'automated' && passport) {
-        const minExpiry = addDays(trip.end_date, 180)
-        taskStatus = passport.expiry_date >= minExpiry ? 'complete' : 'pending'
-      }
-
-      await supabase.from('sub_tasks').insert({
-        requirement_id: req.id,
-        name: stubTask.name,
-        type: stubTask.type,
-        status: taskStatus,
-        sort_order: stubTask.sort_order,
-        description: stubTask.description ?? null,
-      })
-    }
-  }
-
-  // Always insert a manager approval requirement
-  await supabase.from('requirements').insert({
-    trip_id: tripId,
-    name: 'Manager Approval',
-    type: 'manager_approval',
-    is_mandatory: true,
-    status: 'not_started',
-    time_required_days: 0,
-    latest_start_date: null,
-    why_it_applies: 'Your organisation requires manager sign-off before travel can proceed.',
-    guidance: 'Select your manager and send a request for approval. Your trip cannot be marked compliant until this is approved.',
-    external_link: null,
-    what_you_need: null,
-    approval_state: 'unsent',
-    approver_name: null,
-    approval_log: [],
+  // Build sub_task payloads using returned requirement IDs, matched by name
+  const minExpiry = addDays(trip.end_date, 180)
+  const subTaskPayloads = assessment.requirements.flatMap(stubReq => {
+    const req = insertedRequirements.find(r => r.name === stubReq.name)
+    if (!req) return []
+    return stubReq.sub_tasks.map(stubTask => ({
+      requirement_id: req.id,
+      name: stubTask.name,
+      type: stubTask.type,
+      // Automated passport validity check: must be valid 6 months beyond return date
+      status: (stubTask.type === 'automated' && passport && passport.expiry_date >= minExpiry)
+        ? 'complete' as const
+        : 'pending' as const,
+      sort_order: stubTask.sort_order,
+      description: stubTask.description ?? null,
+    }))
   })
 
-  const { data: requirements } = await supabase
-    .from('requirements')
-    .select('*')
-    .eq('trip_id', tripId)
+  // Batch insert sub_tasks and manager approval requirement in parallel
+  const [, { data: managerReq }] = await Promise.all([
+    subTaskPayloads.length > 0
+      ? supabase.from('sub_tasks').insert(subTaskPayloads)
+      : Promise.resolve(null),
+    supabase.from('requirements').insert({
+      trip_id: tripId,
+      name: 'Manager Approval',
+      type: 'manager_approval',
+      is_mandatory: true,
+      status: 'not_started',
+      time_required_days: 0,
+      latest_start_date: null,
+      why_it_applies: 'Your organisation requires manager sign-off before travel can proceed.',
+      guidance: 'Select your manager and send a request for approval. Your trip cannot be marked compliant until this is approved.',
+      external_link: null,
+      what_you_need: null,
+      approval_state: 'unsent',
+      approver_name: null,
+      approval_log: [],
+    }).select().single(),
+  ])
 
-  const complianceStatus = computeComplianceStatus(requirements ?? [])
+  // Compute compliance status from in-memory data — no re-fetch needed
+  const allRequirements = [...insertedRequirements, ...(managerReq ? [managerReq] : [])]
+  const complianceStatus = computeComplianceStatus(allRequirements)
 
   await supabase
     .from('trips')
@@ -398,19 +395,20 @@ export async function sendManagerApproval(formData: FormData) {
   const tripId = formData.get('tripId') as string
   const approverName = formData.get('approverName') as string
 
-  await supabase
-    .from('requirements')
-    .update({
-      approval_state: 'pending',
-      approver_name: approverName,
-      status: 'in_progress',
-    })
-    .eq('id', requirementId)
-
-  const { data: allRequirements } = await supabase
-    .from('requirements')
-    .select('*')
-    .eq('trip_id', tripId)
+  const [, { data: allRequirements }] = await Promise.all([
+    supabase
+      .from('requirements')
+      .update({
+        approval_state: 'pending',
+        approver_name: approverName,
+        status: 'in_progress',
+      })
+      .eq('id', requirementId),
+    supabase
+      .from('requirements')
+      .select('*')
+      .eq('trip_id', tripId),
+  ])
 
   const newStatus = computeComplianceStatus(allRequirements ?? [])
   await supabase
