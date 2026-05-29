@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { runAssessment } from '@/lib/assessment/stub'
 import { subtractDays, addDays, computeComplianceStatus } from '@/lib/compliance'
+import { syncComplianceStatus } from './_utils'
 
 export async function createTrip(formData: FormData) {
   const supabase = await createClient()
@@ -266,18 +267,7 @@ export async function uploadEvidence(formData: FormData) {
     .update({ status: 'complete', completed_at: new Date().toISOString() })
     .eq('id', requirementId)
 
-  const { data: allRequirements } = await supabase
-    .from('requirements')
-    .select('*')
-    .eq('trip_id', tripId)
-
-  const newStatus = computeComplianceStatus(allRequirements ?? [])
-
-  await supabase
-    .from('trips')
-    .update({ compliance_status: newStatus })
-    .eq('id', tripId)
-    .eq('user_id', user.id)
+  await syncComplianceStatus(supabase, tripId, user.id)
 
   revalidatePath(`/trips/${tripId}`)
 }
@@ -301,17 +291,7 @@ export async function markApplicationSubmitted(formData: FormData) {
     .update({ status: 'in_progress' })
     .eq('id', requirementId)
 
-  const { data: allRequirements } = await supabase
-    .from('requirements')
-    .select('*')
-    .eq('trip_id', tripId)
-
-  const newStatus = computeComplianceStatus(allRequirements ?? [])
-  await supabase
-    .from('trips')
-    .update({ compliance_status: newStatus })
-    .eq('id', tripId)
-    .eq('user_id', user.id)
+  await syncComplianceStatus(supabase, tripId, user.id)
 
   revalidatePath(`/trips/${tripId}`)
 }
@@ -395,27 +375,16 @@ export async function sendManagerApproval(formData: FormData) {
   const tripId = formData.get('tripId') as string
   const approverName = formData.get('approverName') as string
 
-  const [, { data: allRequirements }] = await Promise.all([
-    supabase
-      .from('requirements')
-      .update({
-        approval_state: 'pending',
-        approver_name: approverName,
-        status: 'in_progress',
-      })
-      .eq('id', requirementId),
-    supabase
-      .from('requirements')
-      .select('*')
-      .eq('trip_id', tripId),
-  ])
-
-  const newStatus = computeComplianceStatus(allRequirements ?? [])
   await supabase
-    .from('trips')
-    .update({ compliance_status: newStatus })
-    .eq('id', tripId)
-    .eq('user_id', user.id)
+    .from('requirements')
+    .update({
+      approval_state: 'pending',
+      approver_name: approverName,
+      status: 'in_progress',
+    })
+    .eq('id', requirementId)
+
+  await syncComplianceStatus(supabase, tripId, user.id)
 
   revalidatePath(`/trips/${tripId}`)
 }
@@ -450,17 +419,7 @@ export async function resolveManagerApproval(formData: FormData) {
     })
     .eq('id', requirementId)
 
-  const { data: allRequirements } = await supabase
-    .from('requirements')
-    .select('*')
-    .eq('trip_id', tripId)
-
-  const newStatus = computeComplianceStatus(allRequirements ?? [])
-  await supabase
-    .from('trips')
-    .update({ compliance_status: newStatus })
-    .eq('id', tripId)
-    .eq('user_id', user.id)
+  await syncComplianceStatus(supabase, tripId, user.id)
 
   revalidatePath(`/trips/${tripId}`)
 }
