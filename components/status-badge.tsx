@@ -19,6 +19,6 @@ export function StatusBadge({ status, state, className }: Props) {
       </span>
     )
   }
-  if (!status) return null
+  if (!status || status === 'not_started') return null
   return <UiStatusBadge status={status} className={className} />
 }

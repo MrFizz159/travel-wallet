@@ -24,7 +24,7 @@ export type RequirementStatusValue = 'not_started' | 'in_progress' | 'at_risk' |
 export type SubTaskType = 'automated' | 'generatable' | 'primary_action' | 'informational'
 export type SubTaskStatus = 'pending' | 'complete' | 'case_in_progress' | 'submitted'
 export type AvatarSize = 'sm' | 'md' | 'lg'
-export type TripStatus = 'compliant' | 'incomplete' | 'at_risk' | null
+export type TripStatus = 'compliant' | 'incomplete' | 'at_risk' | 'not_started' | null
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CARD
@@ -331,7 +331,7 @@ function ComplianceSummaryRow({
   requirements: TripRequirement[]
   status: TripStatus
 }) {
-  if (!status || status === 'compliant') return null
+  if (!status || status === 'compliant' || status === 'not_started') return null
   const mandatory = requirements.filter(r => r.is_mandatory)
   if (mandatory.length === 0) return null
 
@@ -411,7 +411,7 @@ export function TripCard({
         </p>
 
         {/* Status badge */}
-        {status && <StatusBadge status={status} className="self-start" />}
+        {status && status !== 'not_started' && <StatusBadge status={status} className="self-start" />}
 
         {/* Compliance summary */}
         {requirements && (
