@@ -14,7 +14,7 @@ export const STUB_MANAGERS = [
   'Tom Walker',
   'Emma Rodriguez',
 ]
-export type ComplianceStatus = 'compliant' | 'incomplete' | 'at_risk'
+export type ComplianceStatus = 'compliant' | 'incomplete' | 'at_risk' | 'not_started'
 export type RequirementStatus = 'not_started' | 'in_progress' | 'at_risk' | 'complete'
 export type SubTaskType = 'automated' | 'generatable' | 'primary_action' | 'third_party' | 'informational'
 export type SubTaskStatus = 'pending' | 'complete' | 'case_in_progress' | 'submitted'
@@ -75,11 +75,23 @@ export interface Trip {
   activated_at: string | null
 }
 
+export type RequirementType = 'visa' | 'eta' | 'manager_approval' | 'letter'
+
+export type CaseStatus =
+  | 'Case Initiated'
+  | 'Process Recommended'
+  | 'Documents Collected'
+  | 'Application Prepared'
+  | 'Application Submitted'
+  | 'Official Agency Response'
+  | 'Passport Returned'
+  | 'Case Completed'
+
 export interface Requirement {
   id: string
   trip_id: string
   name: string
-  type: string
+  type: RequirementType
   is_mandatory: boolean
   status: RequirementStatus
   time_required_days: number
@@ -122,7 +134,7 @@ export interface TravelCase {
   case_reference: string
   visa_type: string
   destination_country: string
-  status: string
+  status: CaseStatus
   progress: number
   initiated_at: string
   updated_at: string

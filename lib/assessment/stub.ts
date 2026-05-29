@@ -27,6 +27,13 @@ export interface AssessmentOutput {
 const NO_ACTION: AssessmentOutput = { result: 'no_action_required', requirements: [] }
 const REVIEW: AssessmentOutput = { result: 'review_required', requirements: [] }
 
+const PASSPORT_VALIDITY_SUBTASK: StubSubTask = {
+  name: 'Passport validity',
+  type: 'automated',
+  sort_order: 0,
+  description: 'Checked automatically when trip activates',
+}
+
 const STUBS: Record<string, AssessmentOutput> = {
   IN: {
     result: 'action_required',
@@ -49,7 +56,7 @@ const STUBS: Record<string, AssessmentOutput> = {
           'Application fee (USD 25)',
         ],
         sub_tasks: [
-          { name: 'Passport validity',          type: 'automated',     sort_order: 0, description: 'Checked automatically when trip activates' },
+          PASSPORT_VALIDITY_SUBTASK,
           { name: 'Letter of support',          type: 'generatable',   sort_order: 1, description: 'Get signed by your manager or HR, then upload signed copy' },
           { name: 'Letter of invitation',       type: 'generatable',   sort_order: 2, description: 'Get signed by the host company, then upload signed copy' },
           { name: 'Submit application',         type: 'third_party',   sort_order: 3, description: 'Start your application at the government portal' },
@@ -80,7 +87,7 @@ const STUBS: Record<string, AssessmentOutput> = {
           'Approximate travel itinerary',
         ],
         sub_tasks: [
-          { name: 'Passport validity', type: 'automated',      sort_order: 0, description: 'Checked automatically when trip activates' },
+          PASSPORT_VALIDITY_SUBTASK,
           { name: 'Apply for ESTA',    type: 'primary_action', sort_order: 1, description: 'Complete the application at the official CBP website and upload your approval' },
         ],
       },
@@ -103,7 +110,7 @@ const STUBS: Record<string, AssessmentOutput> = {
           'https://immi.homeaffairs.gov.au/visas/getting-a-visa/visa-listing/electronic-travel-authority-601',
         what_you_need: ['Valid passport', 'AUD 20 application charge'],
         sub_tasks: [
-          { name: 'Passport validity', type: 'automated',      sort_order: 0, description: 'Checked automatically when trip activates' },
+          PASSPORT_VALIDITY_SUBTASK,
           { name: 'Apply for ETA',     type: 'primary_action', sort_order: 1, description: 'Apply via the Australian ETA app and upload your approval' },
         ],
       },
@@ -125,7 +132,7 @@ const STUBS: Record<string, AssessmentOutput> = {
         external_link: 'https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/eta.html',
         what_you_need: ['Valid passport', 'Credit or debit card (CAD 7 fee)', 'Email address'],
         sub_tasks: [
-          { name: 'Passport validity', type: 'automated',      sort_order: 0, description: 'Checked automatically when trip activates' },
+          PASSPORT_VALIDITY_SUBTASK,
           { name: 'Apply for eTA',     type: 'primary_action', sort_order: 1, description: 'Apply online via the Government of Canada website and upload your approval' },
         ],
       },

@@ -24,9 +24,9 @@ export function effectiveStatus(req: Requirement): RequirementStatus {
 }
 
 export function computeComplianceStatus(requirements: Requirement[]): ComplianceStatus {
-  if (requirements.length === 0) return 'compliant'
+  if (requirements.length === 0) return 'not_started'
   const mandatory = requirements.filter(r => r.is_mandatory)
-  if (mandatory.length === 0) return 'compliant'
+  if (mandatory.length === 0) return 'not_started'
   const statuses = mandatory.map(effectiveStatus)
   if (statuses.some(s => s === 'at_risk')) return 'at_risk'
   if (statuses.some(s => s !== 'complete')) return 'incomplete'
