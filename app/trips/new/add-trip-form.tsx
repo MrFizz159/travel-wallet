@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, ChevronRight, CheckCircle } from 'lucide-react'
+import { ArrowLeft, ChevronRight, CheckCircle, Loader2 } from 'lucide-react'
 import { COUNTRIES, countryFlag } from '@/lib/countries'
 import { runAssessment, type AssessmentOutput } from '@/lib/assessment/stub'
 import { createTrip } from '@/app/actions/trips'
@@ -73,6 +73,8 @@ export function AddTripForm({ passports }: Props) {
   const [passportId, setPassportId] = useState(primaryPassport?.id ?? '')
   const [assessment, setAssessment] = useState<AssessmentOutput | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isSubmitting, startSubmitTransition] = useTransition()
 
   const selectedCountry = COUNTRIES.find(c => c.code === countryCode)
   const historical = startDate ? isHistoricalDate(startDate) : false
@@ -325,7 +327,20 @@ export function AddTripForm({ passports }: Props) {
           )}
 
           <div className="sticky bottom-20 mt-2">
-            <form action={createTrip}>
+            <form
+              onSubmit={e => {
+                e.preventDefault()
+                setSubmitError(null)
+                const fd = new FormData(e.currentTarget)
+                startSubmitTransition(async () => {
+                  try {
+                    await createTrip(fd)
+                  } catch (err) {
+                    setSubmitError(err instanceof Error ? err.message : 'Failed to save trip. Please try again.')
+                  }
+                })
+              }}
+            >
               <input type="hidden" name="destination_country" value={selectedCountry.name} />
               <input type="hidden" name="destination_country_code" value={countryCode} />
               <input type="hidden" name="start_date" value={startDate} />
@@ -334,11 +349,14 @@ export function AddTripForm({ passports }: Props) {
               <input type="hidden" name="passport_id" value={passportId} />
               <input type="hidden" name="is_historical" value={String(historical)} />
               <input type="hidden" name="assessment_result" value={assessment.result} />
+              {submitError && <p className="text-xs text-status-at-risk mb-2 px-1">{submitError}</p>}
               <button
                 type="submit"
-                className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm shadow-lg"
+                disabled={isSubmitting}
+                className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {historical ? 'Save trip' : 'Add this trip'}
+                {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+                {isSubmitting ? 'Saving…' : (historical ? 'Save trip' : 'Add this trip')}
               </button>
             </form>
           </div>

@@ -1,9 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { updateProfileWizard } from '@/app/actions/profile'
-
-const inputClass = 'w-full h-12 px-4 rounded-xl border border-input bg-background text-base focus:outline-none focus:ring-2 focus:ring-ring'
-const labelClass = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground'
+import { ProfileSetupForm } from './profile-setup-form'
 
 export default async function ProfileSetupPage() {
   const supabase = await createClient()
@@ -23,47 +20,11 @@ export default async function ProfileSetupPage() {
         </p>
       </div>
 
-      <form action={updateProfileWizard} className="flex flex-col gap-6 mt-8">
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Full name</label>
-          <input
-            type="text"
-            name="full_name"
-            defaultValue={(profile as any)?.full_name ?? ''}
-            placeholder="As it appears on your passport"
-            className={inputClass}
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Nationality</label>
-          <input
-            type="text"
-            name="nationality"
-            defaultValue={(profile as any)?.nationality ?? ''}
-            placeholder="e.g. British"
-            className={inputClass}
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Country of residence</label>
-          <input
-            type="text"
-            name="country_of_residence"
-            defaultValue={(profile as any)?.country_of_residence ?? ''}
-            placeholder="e.g. United Kingdom"
-            className={inputClass}
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm"
-        >
-          Continue →
-        </button>
-      </form>
+      <ProfileSetupForm
+        fullName={(profile as any)?.full_name ?? ''}
+        nationality={(profile as any)?.nationality ?? ''}
+        countryOfResidence={(profile as any)?.country_of_residence ?? ''}
+      />
 
       <Link
         href="/profile/setup/passport"
