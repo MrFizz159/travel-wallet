@@ -44,7 +44,7 @@ export default async function TravelHistoryPage({
 
   let query = supabase
     .from('trips')
-    .select('*')
+    .select('id, start_date, end_date, destination_country, destination_country_code, purpose')
     .eq('user_id', user!.id)
     .eq('state', 'completed')
     .order('start_date', { ascending: false })
@@ -52,9 +52,10 @@ export default async function TravelHistoryPage({
   if (fromDate) query = query.gte('start_date', fromDate)
 
   const { data: trips } = await query
-  const tripList = (trips ?? []) as Trip[]
+  type TripRow = Pick<Trip, 'id' | 'start_date' | 'end_date' | 'destination_country' | 'destination_country_code' | 'purpose'>
+  const tripList = (trips ?? []) as TripRow[]
 
-  const grouped: Record<number, Trip[]> = {}
+  const grouped: Record<number, TripRow[]> = {}
   for (const trip of tripList) {
     const year = new Date(trip.start_date + 'T00:00:00').getFullYear()
     if (!grouped[year]) grouped[year] = []
