@@ -55,6 +55,11 @@ function durationDays(start: string, end: string) {
   return Math.round(ms / 86400000) + 1
 }
 
+function formatChipDate(dateStr: string) {
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 function latestStartLabel(startDate: string, daysRequired: number): string {
   const d = new Date(startDate + 'T00:00:00')
   d.setDate(d.getDate() - daysRequired)
@@ -204,25 +209,53 @@ export function AddTripForm({ passports }: Props) {
 
       {step === 'result' && assessment && selectedCountry && (
         <>
-          {/* Compact gradient header */}
-          <div className="relative -mx-4 h-32 bg-gradient-to-br from-primary to-primary/70 overflow-hidden rounded-b-3xl">
-            <button
-              onClick={() => setStep('form')}
-              className="absolute top-3 left-4 w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-6xl">{countryFlag(countryCode)}</span>
+          {/* Compact header */}
+          <div className="relative -mx-4 bg-[#2D1A5C] overflow-hidden rounded-b-3xl mb-5">
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                backgroundImage: 'radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)',
+                backgroundSize: '14px 14px',
+              }}
+            />
+            <div className="relative z-10 flex flex-col gap-2.5 px-4 py-3">
+              {/* Row 1: back */}
+              <div>
+                <button
+                  onClick={() => setStep('form')}
+                  className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center text-white"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+              </div>
+              {/* Row 2: flag + country name */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span
+                  className="text-lg leading-none w-7 h-5 rounded-sm border border-white/25 overflow-hidden inline-flex items-center justify-center shrink-0"
+                  role="img"
+                  aria-label={selectedCountry.name}
+                >
+                  {countryFlag(countryCode)}
+                </span>
+                <span className="text-[22px] font-extrabold text-white leading-tight">
+                  {selectedCountry.name}
+                </span>
+              </div>
+              {/* Row 3: date chips + purpose · duration */}
+              <div className="flex items-center gap-1.5 flex-wrap pb-1">
+                <span className="bg-white/15 rounded-md px-2 py-1 text-xs font-semibold text-white">
+                  {formatChipDate(startDate)}
+                </span>
+                <span className="text-white/40 text-xs">›</span>
+                <span className="bg-white/15 rounded-md px-2 py-1 text-xs font-semibold text-white">
+                  {formatChipDate(endDate)}
+                </span>
+                <div className="w-px h-3.5 bg-white/20 mx-0.5 shrink-0" />
+                <span className="text-xs text-white/60 capitalize">
+                  {purpose} · {durationDays(startDate, endDate)} day{durationDays(startDate, endDate) !== 1 ? 's' : ''}
+                </span>
+              </div>
             </div>
-          </div>
-
-          {/* Trip summary */}
-          <div className="mt-5 mb-5">
-            <h1 className="text-2xl font-bold">{selectedCountry.name}</h1>
-            <p className="text-sm text-muted-foreground mt-1 capitalize">
-              {formatDateRange(startDate, endDate)} · {purpose} · {durationDays(startDate, endDate)} days
-            </p>
           </div>
 
           {historical && (
