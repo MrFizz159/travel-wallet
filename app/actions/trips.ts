@@ -43,6 +43,123 @@ export async function createTrip(formData: FormData) {
   redirect(`/trips`)
 }
 
+export async function createAndActivateTrip(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth')
+
+  const destination_country = formData.get('destination_country') as string
+  const destination_country_code = formData.get('destination_country_code') as string
+  const start_date = formData.get('start_date') as string
+  const end_date = formData.get('end_date') as string
+  const purpose = formData.get('purpose') as string
+  const passport_id = (formData.get('passport_id') as string) || null
+  const assessment_result = formData.get('assessment_result') as string
+
+  const { data: trip, error } = await supabase
+    .from('trips')
+    .insert({
+      user_id: user.id,
+      destination_country,
+      destination_country_code,
+      start_date,
+      end_date,
+      purpose,
+      passport_id,
+      is_historical: false,
+      assessment_result,
+      state: 'active',
+      activated_at: new Date().toISOString(),
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  let passport: { expiry_date: string } | null = null
+  if (passport_id) {
+    const { data } = await supabase
+      .from('passports')
+      .select('expiry_date')
+      .eq('id', passport_id)
+      .single()
+    passport = data
+  }
+
+  const assessment = runAssessment(destination_country_code)
+
+  const { data: insertedRequirements } = await supabase
+    .from('requirements')
+    .insert(assessment.requirements.map(stubReq => ({
+      trip_id: trip.id,
+      name: stubReq.name,
+      type: stubReq.type,
+      is_mandatory: stubReq.is_mandatory,
+      status: 'not_started',
+      time_required_days: stubReq.time_required_days,
+      latest_start_date: stubReq.time_required_days > 0
+        ? subtractDays(start_date, stubReq.time_required_days)
+        : null,
+      why_it_applies: stubReq.why_it_applies,
+      guidance: stubReq.guidance,
+      external_link: stubReq.external_link ?? null,
+      what_you_need: stubReq.what_you_need ?? null,
+    })))
+    .select()
+
+  if (!insertedRequirements) throw new Error('Failed to insert requirements')
+
+  const minExpiry = addDays(end_date, 180)
+  const subTaskPayloads = assessment.requirements.flatMap(stubReq => {
+    const req = insertedRequirements.find(r => r.name === stubReq.name)
+    if (!req) return []
+    return stubReq.sub_tasks.map(stubTask => ({
+      requirement_id: req.id,
+      name: stubTask.name,
+      type: stubTask.type,
+      status: (stubTask.type === 'automated' && passport && passport.expiry_date >= minExpiry)
+        ? 'complete' as const
+        : 'pending' as const,
+      sort_order: stubTask.sort_order,
+      description: stubTask.description ?? null,
+    }))
+  })
+
+  const [, { data: managerReq }] = await Promise.all([
+    subTaskPayloads.length > 0
+      ? supabase.from('sub_tasks').insert(subTaskPayloads)
+      : Promise.resolve(null),
+    supabase.from('requirements').insert({
+      trip_id: trip.id,
+      name: 'Manager Approval',
+      type: 'manager_approval',
+      is_mandatory: true,
+      status: 'not_started',
+      time_required_days: 0,
+      latest_start_date: null,
+      why_it_applies: 'Your organisation requires manager sign-off before travel can proceed.',
+      guidance: 'Select your manager and send a request for approval. Your trip cannot be marked compliant until this is approved.',
+      external_link: null,
+      what_you_need: null,
+      approval_state: 'unsent',
+      approver_name: null,
+      approval_log: [],
+    }).select().single(),
+  ])
+
+  const allRequirements = [...insertedRequirements, ...(managerReq ? [managerReq] : [])]
+  const complianceStatus = computeComplianceStatus(allRequirements)
+
+  await supabase
+    .from('trips')
+    .update({ compliance_status: complianceStatus })
+    .eq('id', trip.id)
+
+  revalidatePath(`/trips/${trip.id}`)
+  revalidatePath('/trips')
+  redirect(`/trips/${trip.id}`)
+}
+
 export async function activateTrip(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

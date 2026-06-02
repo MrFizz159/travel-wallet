@@ -280,7 +280,7 @@ export function TripDetailView({ trip }: Props) {
 
         <form action={activateTrip}>
           <input type="hidden" name="tripId" value={trip.id} />
-          <PrimaryButton type="submit">Activate trip</PrimaryButton>
+          <PrimaryButton type="submit">Get Started</PrimaryButton>
         </form>
       </div>
     )

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft, ChevronRight, CheckCircle, Loader2 } from 'lucide-react'
 import { COUNTRIES, countryFlag } from '@/lib/countries'
 import { runAssessment, type AssessmentOutput } from '@/lib/assessment/stub'
-import { createTrip } from '@/app/actions/trips'
+import { createTrip, createAndActivateTrip } from '@/app/actions/trips'
 import { SectionHeader } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
 
@@ -79,7 +79,8 @@ export function AddTripForm({ passports }: Props) {
   const [assessment, setAssessment] = useState<AssessmentOutput | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [isSubmitting, startSubmitTransition] = useTransition()
+  const [isSaving, startSaveTransition] = useTransition()
+  const [isStarting, startStartTransition] = useTransition()
 
   const selectedCountry = COUNTRIES.find(c => c.code === countryCode)
   const historical = startDate ? isHistoricalDate(startDate) : false
@@ -360,38 +361,86 @@ export function AddTripForm({ passports }: Props) {
           )}
 
           <div className="sticky bottom-20 mt-2">
-            <form
-              onSubmit={e => {
-                e.preventDefault()
-                setSubmitError(null)
-                const fd = new FormData(e.currentTarget)
-                startSubmitTransition(async () => {
-                  try {
-                    await createTrip(fd)
-                  } catch (err) {
-                    setSubmitError(err instanceof Error ? err.message : 'Failed to save trip. Please try again.')
-                  }
-                })
-              }}
-            >
-              <input type="hidden" name="destination_country" value={selectedCountry.name} />
-              <input type="hidden" name="destination_country_code" value={countryCode} />
-              <input type="hidden" name="start_date" value={startDate} />
-              <input type="hidden" name="end_date" value={endDate} />
-              <input type="hidden" name="purpose" value={purpose} />
-              <input type="hidden" name="passport_id" value={passportId} />
-              <input type="hidden" name="is_historical" value={String(historical)} />
-              <input type="hidden" name="assessment_result" value={assessment.result} />
-              {submitError && <p className="text-xs text-status-at-risk mb-2 px-1">{submitError}</p>}
+            {submitError && <p className="text-xs text-status-at-risk mb-2 px-1">{submitError}</p>}
+            {historical ? (
               <button
-                type="submit"
-                disabled={isSubmitting}
+                type="button"
+                disabled={isSaving}
+                onClick={() => {
+                  setSubmitError(null)
+                  const fd = new FormData()
+                  fd.append('destination_country', selectedCountry.name)
+                  fd.append('destination_country_code', countryCode)
+                  fd.append('start_date', startDate)
+                  fd.append('end_date', endDate)
+                  fd.append('purpose', purpose)
+                  fd.append('passport_id', passportId)
+                  fd.append('is_historical', 'true')
+                  fd.append('assessment_result', assessment.result)
+                  startSaveTransition(async () => {
+                    try { await createTrip(fd) } catch (err) {
+                      setSubmitError(err instanceof Error ? err.message : 'Failed to save trip. Please try again.')
+                    }
+                  })
+                }}
                 className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-                {isSubmitting ? 'Saving…' : (historical ? 'Save trip' : 'Add this trip')}
+                {isSaving && <Loader2 size={16} className="animate-spin" />}
+                {isSaving ? 'Saving…' : 'Save trip'}
               </button>
-            </form>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  disabled={isStarting || isSaving}
+                  onClick={() => {
+                    setSubmitError(null)
+                    const fd = new FormData()
+                    fd.append('destination_country', selectedCountry.name)
+                    fd.append('destination_country_code', countryCode)
+                    fd.append('start_date', startDate)
+                    fd.append('end_date', endDate)
+                    fd.append('purpose', purpose)
+                    fd.append('passport_id', passportId)
+                    fd.append('assessment_result', assessment.result)
+                    startStartTransition(async () => {
+                      try { await createAndActivateTrip(fd) } catch (err) {
+                        setSubmitError(err instanceof Error ? err.message : 'Failed to save trip. Please try again.')
+                      }
+                    })
+                  }}
+                  className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isStarting && <Loader2 size={16} className="animate-spin" />}
+                  {isStarting ? 'Setting up…' : 'Get Started'}
+                </button>
+                <button
+                  type="button"
+                  disabled={isSaving || isStarting}
+                  onClick={() => {
+                    setSubmitError(null)
+                    const fd = new FormData()
+                    fd.append('destination_country', selectedCountry.name)
+                    fd.append('destination_country_code', countryCode)
+                    fd.append('start_date', startDate)
+                    fd.append('end_date', endDate)
+                    fd.append('purpose', purpose)
+                    fd.append('passport_id', passportId)
+                    fd.append('is_historical', 'false')
+                    fd.append('assessment_result', assessment.result)
+                    startSaveTransition(async () => {
+                      try { await createTrip(fd) } catch (err) {
+                        setSubmitError(err instanceof Error ? err.message : 'Failed to save trip. Please try again.')
+                      }
+                    })
+                  }}
+                  className="w-full h-12 rounded-xl border border-border text-foreground font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSaving && <Loader2 size={16} className="animate-spin" />}
+                  {isSaving ? 'Saving…' : 'Save Trip'}
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}
