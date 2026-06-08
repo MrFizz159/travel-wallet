@@ -4,11 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import { subtractDays } from '@/lib/compliance'
 import { countryFlag } from '@/lib/countries'
 import { SectionHeader } from '@/components/ui-kit'
-import type { Trip } from '@/lib/types'
 
 function durationDays(start: string, end: string) {
-  const ms = new Date(end + 'T00:00:00').getTime() - new Date(start + 'T00:00:00').getTime()
-  return Math.round(ms / 86400000) + 1
+  return Math.max(1, Math.round((new Date(end + 'T00:00:00').getTime() - new Date(start + 'T00:00:00').getTime()) / 86400000) + 1)
 }
 
 function formatDateRange(start: string, end: string) {
@@ -28,6 +26,20 @@ const RANGES = [
   { value: 'all',  label: 'All time'  },
 ]
 
+interface LegRow {
+  destination_country: string
+  destination_country_code: string
+  start_date: string
+  end_date: string
+  purpose: string
+  sort_order: number
+}
+
+interface TripRow {
+  id: string
+  trip_legs: LegRow[]
+}
+
 export default async function TravelHistoryPage({
   searchParams,
 }: {
@@ -42,39 +54,50 @@ export default async function TravelHistoryPage({
   if (range === '12mo') fromDate = subtractDays(today, 365)
   else if (range === '2yr') fromDate = subtractDays(today, 730)
 
-  let query = supabase
+  const { data: trips } = await supabase
     .from('trips')
-    .select('id, start_date, end_date, destination_country, destination_country_code, purpose')
+    .select('id, trip_legs(destination_country, destination_country_code, start_date, end_date, purpose, sort_order)')
     .eq('user_id', user!.id)
     .eq('state', 'completed')
-    .order('start_date', { ascending: false })
 
-  if (fromDate) query = query.gte('start_date', fromDate)
-
-  const { data: trips } = await query
-  type TripRow = Pick<Trip, 'id' | 'start_date' | 'end_date' | 'destination_country' | 'destination_country_code' | 'purpose'>
   const tripList = (trips ?? []) as TripRow[]
 
-  const grouped: Record<number, TripRow[]> = {}
+  // Flatten to individual leg entries for display; use first leg's start_date for date filter
+  type FlatEntry = LegRow & { tripId: string }
+  const flatEntries: FlatEntry[] = []
   for (const trip of tripList) {
-    const year = new Date(trip.start_date + 'T00:00:00').getFullYear()
+    const sortedLegs = [...(trip.trip_legs ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+    for (const leg of sortedLegs) {
+      if (fromDate && leg.start_date < fromDate) continue
+      flatEntries.push({ ...leg, tripId: trip.id })
+    }
+  }
+
+  // Sort by start_date descending
+  flatEntries.sort((a, b) => b.start_date.localeCompare(a.start_date))
+
+  // Group by year using start_date
+  const grouped: Record<number, FlatEntry[]> = {}
+  for (const entry of flatEntries) {
+    const year = new Date(entry.start_date + 'T00:00:00').getFullYear()
     if (!grouped[year]) grouped[year] = []
-    grouped[year].push(trip)
+    grouped[year].push(entry)
   }
   const years = Object.keys(grouped).map(Number).sort((a, b) => b - a)
 
+  // Days per country
   const daysByCountry: Record<string, { days: number; code: string }> = {}
-  for (const trip of tripList) {
-    const days = durationDays(trip.start_date, trip.end_date)
-    if (!daysByCountry[trip.destination_country]) {
-      daysByCountry[trip.destination_country] = { days: 0, code: trip.destination_country_code }
+  for (const entry of flatEntries) {
+    const days = durationDays(entry.start_date, entry.end_date)
+    if (!daysByCountry[entry.destination_country]) {
+      daysByCountry[entry.destination_country] = { days: 0, code: entry.destination_country_code }
     }
-    daysByCountry[trip.destination_country].days += days
+    daysByCountry[entry.destination_country].days += days
   }
   const sortedCountries = Object.entries(daysByCountry).sort((a, b) => b[1].days - a[1].days)
 
   const totalCountries = sortedCountries.length
-  const totalDays = tripList.reduce((sum, trip) => sum + durationDays(trip.start_date, trip.end_date), 0)
+  const totalDays = flatEntries.reduce((sum, e) => sum + durationDays(e.start_date, e.end_date), 0)
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-6">
@@ -92,16 +115,13 @@ export default async function TravelHistoryPage({
         </Link>
       </div>
 
-      {/* Date range filter */}
       <div className="flex gap-2 mb-5">
         {RANGES.map(r => (
           <Link
             key={r.value}
             href={`/wallet/history?range=${r.value}`}
             className={`px-3 py-1.5 rounded-full text-xs font-medium min-h-[32px] flex items-center ${
-              range === r.value
-                ? 'bg-foreground text-background'
-                : 'bg-muted text-muted-foreground'
+              range === r.value ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'
             }`}
           >
             {r.label}
@@ -109,8 +129,7 @@ export default async function TravelHistoryPage({
         ))}
       </div>
 
-      {/* Stats row */}
-      {tripList.length > 0 && (
+      {flatEntries.length > 0 && (
         <div className="grid grid-cols-2 gap-2 mb-6">
           <div className="bg-muted rounded-xl px-3 py-3">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Countries</p>
@@ -123,7 +142,6 @@ export default async function TravelHistoryPage({
         </div>
       )}
 
-      {/* Days per country */}
       {sortedCountries.length > 0 && (
         <section className="mb-6">
           <SectionHeader label="Days per country" />
@@ -132,31 +150,28 @@ export default async function TravelHistoryPage({
               <div key={country} className="flex items-center gap-3 px-4 py-3">
                 <span className="text-base leading-none shrink-0">{countryFlag(code)}</span>
                 <p className="text-sm flex-1 min-w-0 truncate">{country}</p>
-                <p className="text-sm font-semibold tabular-nums shrink-0">
-                  {days} day{days !== 1 ? 's' : ''}
-                </p>
+                <p className="text-sm font-semibold tabular-nums shrink-0">{days} day{days !== 1 ? 's' : ''}</p>
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {/* Trip list grouped by year */}
       {years.map(year => (
         <section key={year} className="mb-6">
           <SectionHeader label={String(year)} />
           <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">
-            {grouped[year].map(trip => (
+            {grouped[year].map((entry, i) => (
               <Link
-                key={trip.id}
-                href={`/trips/${trip.id}`}
+                key={`${entry.tripId}-${entry.sort_order}-${i}`}
+                href={`/trips/${entry.tripId}`}
                 className="flex items-center gap-3 px-4 py-3 min-h-[44px]"
               >
-                <span className="text-base leading-none shrink-0">{countryFlag(trip.destination_country_code)}</span>
+                <span className="text-base leading-none shrink-0">{countryFlag(entry.destination_country_code)}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold">{trip.destination_country}</p>
+                  <p className="text-sm font-semibold">{entry.destination_country}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {formatDateRange(trip.start_date, trip.end_date)} · {durationDays(trip.start_date, trip.end_date)} days · <span className="capitalize">{trip.purpose}</span>
+                    {formatDateRange(entry.start_date, entry.end_date)} · {durationDays(entry.start_date, entry.end_date)} days · <span className="capitalize">{entry.purpose}</span>
                   </p>
                 </div>
               </Link>
@@ -165,13 +180,10 @@ export default async function TravelHistoryPage({
         </section>
       ))}
 
-      {/* Empty state */}
-      {tripList.length === 0 && (
+      {flatEntries.length === 0 && (
         <div className="py-14 text-center">
           <p className="text-sm text-muted-foreground">No trips in this period.</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Add a trip with past dates to log historical travel.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">Add a trip with past dates to log historical travel.</p>
         </div>
       )}
     </div>

@@ -409,7 +409,7 @@ function InformationalStep({ task, stepNumber, reqComplete }: {
 
 // ── Primary action (upload / completion gate) step ────────────────────────────
 
-const AUTH_REQ_TYPES = ['visa', 'eta', 'residence_permit', 'right_to_work']
+const AUTH_REQ_TYPES = ['visa', 'eta', 'transit_eta', 'residence_permit', 'right_to_work']
 
 function PrimaryActionStep({ task, stepNumber, isManaged, reqComplete, tripId, requirementId, requirementName, requirementType, documents, onClose }: {
   task: SubTask; stepNumber: number; isManaged: boolean; reqComplete: boolean

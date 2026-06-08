@@ -21,7 +21,7 @@ import { countryFlagUrl } from '@/lib/countries'
 
 export type StatusValue = 'compliant' | 'incomplete' | 'at_risk' | 'verified'
 export type RequirementStatusValue = 'not_started' | 'in_progress' | 'at_risk' | 'complete'
-export type SubTaskType = 'automated' | 'generatable' | 'primary_action' | 'informational'
+export type SubTaskType = 'automated' | 'generatable' | 'primary_action' | 'third_party' | 'informational'
 export type SubTaskStatus = 'pending' | 'complete' | 'case_in_progress' | 'submitted'
 export type AvatarSize = 'sm' | 'md' | 'lg'
 export type TripStatus = 'compliant' | 'incomplete' | 'at_risk' | 'not_started' | null
@@ -639,6 +639,17 @@ export function SubTaskRow({
         <span className="text-xs text-status-incomplete font-medium shrink-0">Awaiting approval</span>
       )}
 
+      {!isComplete && status !== 'case_in_progress' && status !== 'submitted' && type === 'third_party' && (
+        <button
+          type="button"
+          onClick={onGetStarted}
+          disabled={isPending}
+          className="text-xs px-2.5 py-1 rounded-full border border-border font-semibold text-foreground min-h-[28px] shrink-0 disabled:opacity-50"
+        >
+          {isPending ? <Loader2 size={10} className="animate-spin" /> : 'Apply'}
+        </button>
+      )}
+
       {!isComplete && status !== 'case_in_progress' && status !== 'submitted' && type === 'primary_action' && (
         <button
           type="button"
@@ -646,7 +657,7 @@ export function SubTaskRow({
           disabled={isPending}
           className="text-xs px-2.5 py-1 rounded-full border border-border font-semibold text-foreground min-h-[28px] shrink-0 disabled:opacity-50"
         >
-          {isPending ? <Loader2 size={10} className="animate-spin" /> : (isStarted ? 'Upload evidence' : 'Start application')}
+          {isPending ? <Loader2 size={10} className="animate-spin" /> : 'Upload'}
         </button>
       )}
     </div>

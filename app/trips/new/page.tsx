@@ -12,7 +12,7 @@ export default async function NewTripPage() {
     .order('is_primary', { ascending: false })
 
   return (
-    <div className="min-h-screen px-4 pt-6">
+    <div className="min-h-screen px-4">
       <AddTripForm passports={passports ?? []} />
     </div>
   )

@@ -5,16 +5,26 @@ import { StatusBadge } from '@/components/status-badge'
 import { countryImageUrl } from '@/lib/countries'
 import { PageHeader, Avatar, TripCard, SectionHeader } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
-import type { Trip, Requirement, SubTask } from '@/lib/types'
+import type { Trip, TripLeg, SubTask } from '@/lib/types'
 
-// ── Local types ──────────────────────────────────────────────────────────────
+// ── Local types ───────────────────────────────────────────────────────────────
 
-interface RequirementWithSubTasks extends Requirement {
+interface LegRequirement {
+  id: string
+  name: string
+  status: string
+  is_mandatory: boolean
+  leg_id: string | null
   sub_tasks: SubTask[]
 }
 
-interface TripWithRequirements extends Trip {
-  requirements: RequirementWithSubTasks[]
+interface LegWithRequirements extends TripLeg {
+  requirements: LegRequirement[]
+}
+
+interface TripWithLegs extends Trip {
+  trip_legs: LegWithRequirements[]
+  requirements: LegRequirement[]  // all requirements for the trip (used for trip-level reqs)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -45,6 +55,14 @@ function departsInDays(startDate: string, today: string): number {
   )
 }
 
+function sortedLegs(trip: TripWithLegs): LegWithRequirements[] {
+  return [...(trip.trip_legs ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+}
+
+function tripTitle(trip: TripWithLegs): string {
+  return sortedLegs(trip).map(l => l.destination_country).join(' + ')
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function HomePage() {
@@ -56,27 +74,21 @@ export default async function HomePage() {
     { data: activeTrips },
     { data: passports },
   ] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', user!.id)
-      .single(),
+    supabase.from('profiles').select('full_name').eq('id', user!.id).single(),
     supabase
       .from('trips')
-      .select('*, requirements(*, sub_tasks(*))')
+      .select('*, trip_legs(*, requirements(id, name, status, is_mandatory, leg_id, sub_tasks(*))), requirements(id, name, status, is_mandatory, leg_id)')
       .eq('user_id', user!.id)
-      .eq('state', 'active')
-      .order('start_date', { ascending: true }),
-    supabase
-      .from('passports')
-      .select('id')
-      .eq('user_id', user!.id)
-      .limit(1),
+      .eq('state', 'active'),
+    supabase.from('passports').select('id').eq('user_id', user!.id).limit(1),
   ])
 
-  const trips = (activeTrips ?? []) as TripWithRequirements[]
-  const mostImminentTrip = trips[0] ?? null
-  const upcomingTrips = trips.slice(1)
+  // Sort client-side by first leg start_date (trips no longer have start_date directly)
+  const trips = ([...(activeTrips ?? [])] as TripWithLegs[]).sort((a, b) => {
+    const aDate = sortedLegs(a)[0]?.start_date ?? ''
+    const bDate = sortedLegs(b)[0]?.start_date ?? ''
+    return aDate.localeCompare(bDate)
+  })
 
   const today = new Date().toISOString().split('T')[0]
   const tomorrowDate = tomorrow(today)
@@ -85,16 +97,24 @@ export default async function HomePage() {
   const name = (profile as { full_name: string | null } | null)?.full_name ?? null
   const firstName = name?.split(' ')[0] ?? null
 
+  const mostImminentTrip = trips[0] ?? null
+  const upcomingTrips = trips.slice(1)
+
+  const mostImminentLegs = mostImminentTrip ? sortedLegs(mostImminentTrip) : []
+  const mostImminentFirstLeg = mostImminentLegs[0] ?? null
+  const mostImminentLastLeg = mostImminentLegs[mostImminentLegs.length - 1] ?? null
+
+  // Top task: first incomplete mandatory requirement across all legs + trip-level
   const topTask = mostImminentTrip
-    ? mostImminentTrip.requirements.find(
-        (r) => r.status !== 'complete' && r.is_mandatory === true
-      ) ?? null
+    ? [
+        ...mostImminentLegs.flatMap(l => l.requirements),
+        ...((mostImminentTrip.requirements ?? []).filter(r => r.leg_id === null)),
+      ].find(r => r.status !== 'complete' && r.is_mandatory === true) ?? null
     : null
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-6 pb-4">
 
-      {/* ── Header ───────────────────────────────────────────────────────── */}
       <PageHeader
         title={`${getGreeting()}${firstName ? `, ${firstName}` : ''}`}
         rightSlot={
@@ -107,7 +127,7 @@ export default async function HomePage() {
         }
       />
 
-      {/* ── State A: no active trips ──────────────────────────────────────── */}
+      {/* State A: no active trips */}
       {!mostImminentTrip && (
         <>
           {needsSetup && (
@@ -133,10 +153,12 @@ export default async function HomePage() {
         </>
       )}
 
-      {/* ── State B: hero card ────────────────────────────────────────────── */}
-      {mostImminentTrip && (() => {
-        const isDepartingToday = mostImminentTrip.start_date === today
-        const isDepartingTomorrow = mostImminentTrip.start_date === tomorrowDate
+      {/* State B: hero card */}
+      {mostImminentTrip && mostImminentFirstLeg && (() => {
+        const startDate = mostImminentFirstLeg.start_date
+        const endDate = mostImminentLastLeg?.end_date ?? mostImminentFirstLeg.end_date
+        const isDepartingToday = startDate === today
+        const isDepartingTomorrow = startDate === tomorrowDate
         const isDeparting = isDepartingToday || isDepartingTomorrow
         const isUrgent = isDeparting && mostImminentTrip.compliance_status === 'incomplete'
 
@@ -149,31 +171,26 @@ export default async function HomePage() {
                 isUrgent && 'border-l-4 border-l-status-incomplete'
               )}
             >
-              {/* Destination image */}
               <div className="w-full h-24 bg-muted overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={countryImageUrl(mostImminentTrip.destination_country)}
-                  alt={mostImminentTrip.destination_country}
+                  src={countryImageUrl(mostImminentFirstLeg.destination_country)}
+                  alt={mostImminentFirstLeg.destination_country}
                   className="w-full h-full object-cover"
                 />
               </div>
 
-              {/* Content below image */}
               <div className="px-4 pt-3 pb-4">
-                {/* Destination name */}
                 <h2 className="text-xl font-bold leading-tight mb-1">
-                  {mostImminentTrip.destination_country}
+                  {tripTitle(mostImminentTrip)}
                 </h2>
 
-                {/* Date · purpose */}
                 <p className="text-sm text-muted-foreground capitalize mb-2">
-                  {formatDateRange(mostImminentTrip.start_date, mostImminentTrip.end_date)}
+                  {formatDateRange(startDate, endDate)}
                   {' · '}
-                  {mostImminentTrip.purpose}
+                  {mostImminentFirstLeg.purpose}
                 </p>
 
-                {/* Departure pill + compliance status */}
                 <div className="flex items-center gap-2 mb-3">
                   {isDepartingToday && (
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-status-incomplete-bg text-status-incomplete">
@@ -190,7 +207,6 @@ export default async function HomePage() {
                   )}
                 </div>
 
-                {/* Outstanding task CTA — always shown when action needed */}
                 {topTask ? (
                   <div className="rounded-xl bg-primary text-primary-foreground px-4 py-3 flex items-center justify-between min-h-[48px]">
                     <p className="text-sm font-semibold truncate pr-3">{topTask.name}</p>
@@ -208,29 +224,33 @@ export default async function HomePage() {
               </div>
             </Link>
 
-            {/* ── Upcoming trips strip ────────────────────────────────────── */}
             {upcomingTrips.length > 0 && (
               <section className="mb-4">
                 <SectionHeader label="Coming up" />
                 <div className="flex flex-col gap-2">
-                  {upcomingTrips.map((trip) => (
-                    <Link key={trip.id} href={`/trips/${trip.id}`} className="block">
-                      <TripCard
-                        destination={trip.destination_country}
-                        countryCode={trip.destination_country_code}
-                        dateRange={formatDateRange(trip.start_date, trip.end_date)}
-                        purpose={trip.purpose}
-                        status={trip.compliance_status}
-                        requirements={trip.requirements}
-                        departsIn={departsInDays(trip.start_date, today)}
-                      />
-                    </Link>
-                  ))}
+                  {upcomingTrips.map(trip => {
+                    const legs = sortedLegs(trip)
+                    const fl = legs[0]
+                    const ll = legs[legs.length - 1]
+                    if (!fl) return null
+                    return (
+                      <Link key={trip.id} href={`/trips/${trip.id}`} className="block">
+                        <TripCard
+                          destination={tripTitle(trip)}
+                          countryCode={fl.destination_country_code}
+                          dateRange={formatDateRange(fl.start_date, ll?.end_date ?? fl.end_date)}
+                          purpose={fl.purpose}
+                          status={trip.compliance_status}
+                          requirements={[...legs.flatMap(l => l.requirements), ...(trip.requirements ?? []).filter(r => r.leg_id === null)]}
+                          departsIn={departsInDays(fl.start_date, today)}
+                        />
+                      </Link>
+                    )
+                  })}
                 </div>
               </section>
             )}
 
-            {/* ── Setup banner — shown after trip content ─────────────────── */}
             {needsSetup && (
               <Link
                 href="/profile/setup"
@@ -243,7 +263,6 @@ export default async function HomePage() {
               </Link>
             )}
 
-            {/* ── Add a trip CTA ──────────────────────────────────────────── */}
             <Link
               href="/trips/new"
               className="flex items-center justify-center w-full px-6 py-3 rounded-xl border border-border bg-card text-sm font-semibold min-h-[44px] mt-2"

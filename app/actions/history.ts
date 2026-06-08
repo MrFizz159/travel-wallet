@@ -27,11 +27,6 @@ export async function createTravelHistoryEntry(formData: FormData) {
       user_id: user.id,
       origin_country: origin.name,
       origin_country_code,
-      destination_country: destination.name,
-      destination_country_code,
-      start_date,
-      end_date,
-      purpose,
       is_historical: true,
       state: 'completed',
     })
@@ -39,6 +34,19 @@ export async function createTravelHistoryEntry(formData: FormData) {
     .single()
 
   if (error) throw new Error(error.message)
+
+  const days = Math.max(1, Math.round((new Date(end_date + 'T00:00:00').getTime() - new Date(start_date + 'T00:00:00').getTime()) / 86400000) + 1)
+
+  await supabase.from('trip_legs').insert({
+    trip_id: trip.id,
+    destination_country: destination.name,
+    destination_country_code,
+    start_date,
+    end_date,
+    duration_days: days,
+    purpose,
+    sort_order: 0,
+  })
 
   revalidatePath('/wallet/history')
   redirect(`/trips/${trip.id}`)

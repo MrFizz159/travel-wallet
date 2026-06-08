@@ -5,10 +5,14 @@ import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { countryFlagUrl } from '@/lib/countries'
 import { activateTrip } from '@/app/actions/trips'
-import type { Trip } from '@/lib/types'
+import type { Trip, TripLeg } from '@/lib/types'
+
+interface TripWithLegs extends Trip {
+  trip_legs: Pick<TripLeg, 'destination_country' | 'destination_country_code' | 'start_date' | 'end_date' | 'purpose' | 'sort_order'>[]
+}
 
 interface Props {
-  trip: Trip
+  trip: TripWithLegs
 }
 
 function formatDateRange(start: string, end: string) {
@@ -22,24 +26,25 @@ function formatDateRange(start: string, end: string) {
   return `${sDay} ${sMonth} – ${eDay} ${eMonth}`
 }
 
-function durationDays(start: string, end: string) {
-  const ms = new Date(end + 'T00:00:00').getTime() - new Date(start + 'T00:00:00').getTime()
-  return Math.round(ms / 86400000) + 1
-}
-
 export function ExploratoryTripCard({ trip }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const duration = durationDays(trip.start_date, trip.end_date)
-  const purposeLabel = trip.purpose.charAt(0).toUpperCase() + trip.purpose.slice(1)
+
+  const legs = [...(trip.trip_legs ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+  const firstLeg = legs[0]
+  const lastLeg = legs[legs.length - 1]
+
+  if (!firstLeg) return null
+
+  const title = legs.map(l => l.destination_country).join(' + ')
+  const dateRange = formatDateRange(firstLeg.start_date, lastLeg?.end_date ?? firstLeg.end_date)
+  const purposeLabel = firstLeg.purpose.charAt(0).toUpperCase() + firstLeg.purpose.slice(1)
 
   function handleActivate(e: React.MouseEvent) {
     e.stopPropagation()
     const fd = new FormData()
     fd.append('tripId', trip.id)
-    startTransition(async () => {
-      await activateTrip(fd)
-    })
+    startTransition(async () => { await activateTrip(fd) })
   }
 
   return (
@@ -52,17 +57,15 @@ export function ExploratoryTripCard({ trip }: Props) {
           <div className="flex items-center gap-2 mb-0.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={countryFlagUrl(trip.destination_country_code)}
+              src={countryFlagUrl(firstLeg.destination_country_code)}
               alt=""
               aria-hidden
               className="w-7 h-7 rounded-full object-cover shrink-0 border border-border/30"
             />
-            <h3 className="text-[17px] font-bold leading-tight">
-              {trip.destination_country}
-            </h3>
+            <h3 className="text-[17px] font-bold leading-tight truncate">{title}</h3>
           </div>
           <p className="text-xs text-muted-foreground truncate">
-            {formatDateRange(trip.start_date, trip.end_date)} · {duration}d · {purposeLabel}
+            {dateRange} · {purposeLabel}
           </p>
         </div>
 
@@ -77,9 +80,7 @@ export function ExploratoryTripCard({ trip }: Props) {
               <Loader2 size={12} className="animate-spin" />
               Activating…
             </>
-          ) : (
-            'Activate'
-          )}
+          ) : 'Activate'}
         </button>
       </div>
     </div>

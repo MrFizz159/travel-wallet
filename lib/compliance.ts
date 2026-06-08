@@ -1,4 +1,4 @@
-import type { Requirement, RequirementStatus, ComplianceStatus } from './types'
+import type { Requirement, RequirementStatus, ComplianceStatus, TransitStop } from './types'
 
 export function subtractDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00')
@@ -30,5 +30,28 @@ export function computeComplianceStatus(requirements: Requirement[]): Compliance
   const statuses = mandatory.map(effectiveStatus)
   if (statuses.some(s => s === 'at_risk')) return 'at_risk'
   if (statuses.some(s => s !== 'complete')) return 'incomplete'
+  return 'compliant'
+}
+
+// Semantic alias — identical to computeComplianceStatus but named for leg-level call sites.
+export const computeLegComplianceStatus = computeComplianceStatus
+
+export function transitComplianceStatus(transit: TransitStop): 'compliant' | 'incomplete' {
+  if (transit.checked_at === null) return 'incomplete'
+  if (transit.visa_required === false) return 'compliant'
+  if (transit.visa_required === true && transit.user_confirmed) return 'compliant'
+  return 'incomplete'
+}
+
+export function computeTripComplianceStatus(
+  legStatuses: ComplianceStatus[],
+  transitStatuses: ComplianceStatus[],
+  managerApprovalReqs: Requirement[]
+): ComplianceStatus {
+  const managerStatus = computeComplianceStatus(managerApprovalReqs)
+  const all: ComplianceStatus[] = [...legStatuses, ...transitStatuses, managerStatus]
+  if (all.length === 0) return 'not_started'
+  if (all.some(s => s === 'at_risk')) return 'at_risk'
+  if (all.some(s => s === 'incomplete' || s === 'not_started')) return 'incomplete'
   return 'compliant'
 }

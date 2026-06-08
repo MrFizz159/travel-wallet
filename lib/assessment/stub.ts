@@ -160,7 +160,36 @@ const STUBS: Record<string, AssessmentOutput> = {
   HR: NO_ACTION,
   HU: NO_ACTION,
   RO: NO_ACTION,
-  SG: NO_ACTION,
+  SG: {
+    result: 'action_required',
+    requirements: [
+      {
+        name: 'Singapore Arrival Card (SGAC)',
+        type: 'eta',
+        is_mandatory: true,
+        time_required_days: 3,
+        why_it_applies:
+          'All visitors to Singapore must submit a Singapore Arrival Card online before arrival. No visa is required for UK nationals for stays up to 90 days, but the arrival card is mandatory.',
+        guidance:
+          'Submit the free digital arrival card via the official ICA e-Service within 3 days before your arrival date. Completion is typically instant. Save or screenshot your submission confirmation.',
+        external_link: 'https://eservices.ica.gov.sg/sgarrivalcard/',
+        what_you_need: [
+          'Passport details',
+          'Singapore accommodation address',
+          'Intended length of stay',
+        ],
+        sub_tasks: [
+          PASSPORT_VALIDITY_SUBTASK,
+          {
+            name: 'Submit arrival card',
+            type: 'primary_action',
+            sort_order: 1,
+            description: 'Complete the free online form at the ICA portal and upload your confirmation',
+          },
+        ],
+      },
+    ],
+  },
   AE: NO_ACTION,
   JP: NO_ACTION,
   NZ: NO_ACTION,

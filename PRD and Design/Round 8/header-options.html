@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trip Header — Design Options</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #ECECEC;
+      color: #111;
+      padding: 48px 32px 80px;
+    }
+
+    .page-header { margin-bottom: 56px; }
+    .page-header h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .page-header p { font-size: 14px; color: #6B7280; line-height: 1.5; }
+
+    /* Pitch section */
+    .pitch { margin-bottom: 72px; }
+
+    .pitch-meta { margin-bottom: 24px; }
+    .pitch-tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #6B7280;
+      background: #E5E7EB;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .pitch-meta h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .pitch-meta p { font-size: 13px; color: #6B7280; line-height: 1.5; max-width: 560px; }
+
+    /* Phone frames row */
+    .phones { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; }
+
+    .phone-wrap {}
+    .phone-state-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: #9CA3AF;
+      margin-bottom: 8px;
+      letter-spacing: 0.03em;
+    }
+
+    .phone {
+      width: 320px;
+      background: #fff;
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,0.06),
+        0 4px 6px rgba(0,0,0,0.04),
+        0 16px 40px rgba(0,0,0,0.12);
+    }
+
+    /* ───────────────────────────────────────────
+       Shared content area
+    ─────────────────────────────────────────── */
+    .content { padding: 20px 16px; background: #F9FAFB; }
+
+    .c-country { font-size: 28px; font-weight: 800; color: #111; margin-bottom: 14px; line-height: 1.1; }
+
+    .c-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .c-date-card {
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .c-date-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: #9CA3AF; margin-bottom: 2px; }
+    .c-date-val { font-size: 15px; font-weight: 600; color: #111; }
+
+    .c-meta { font-size: 13px; color: #6B7280; margin-bottom: 18px; }
+
+    .c-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #9CA3AF; margin-bottom: 10px; }
+
+    .c-req {
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+    }
+    .c-req-title { font-size: 13px; font-weight: 600; color: #111; margin-bottom: 2px; }
+    .c-req-sub { font-size: 12px; color: #9CA3AF; }
+
+    /* ───────────────────────────────────────────
+       Status pills (shared)
+    ─────────────────────────────────────────── */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .pill-exploratory { background: #F3F4F6; color: #374151; }
+    .pill-incomplete   { background: #FEF3C7; color: #92400E; }
+
+    /* ───────────────────────────────────────────
+       PITCH 1 — Compact Bar
+    ─────────────────────────────────────────── */
+    .p1-bar {
+      height: 56px;
+      background: #fff;
+      border-bottom: 1px solid #E5E7EB;
+      display: flex;
+      align-items: center;
+      padding: 0 8px 0 4px;
+      gap: 8px;
+    }
+
+    .p1-back {
+      width: 44px; height: 44px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      color: #374151;
+    }
+
+    .p1-identity {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .flag-circle {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      border: 1px solid #E5E7EB;
+      overflow: hidden;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px;
+      line-height: 1;
+      background: #F9FAFB;
+    }
+
+    .p1-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: #111;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ───────────────────────────────────────────
+       PITCH 2 — Information-Rich Hero
+    ─────────────────────────────────────────── */
+    .p2-hero {
+      background: #2A1955;
+      padding: 12px 16px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .p2-hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px);
+      background-size: 14px 14px;
+      pointer-events: none;
+    }
+
+    .p2-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative; z-index: 1;
+    }
+
+    .p2-back {
+      width: 36px; height: 36px;
+      background: rgba(255,255,255,0.12);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .p2-more {
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .p2-middle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: relative; z-index: 1;
+      flex-wrap: wrap;
+    }
+
+    .flag-rect {
+      width: 28px; height: 20px;
+      border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.25);
+      overflow: hidden;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .p2-country { font-size: 22px; font-weight: 800; color: #fff; line-height: 1; }
+
+    .p2-pill-exploratory { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.9); }
+    .p2-pill-incomplete   { background: #FEF3C7; color: #92400E; }
+
+    .p2-bottom {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      position: relative; z-index: 1;
+    }
+
+    .p2-chip {
+      background: rgba(255,255,255,0.12);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .p2-divider { width: 1px; height: 14px; background: rgba(255,255,255,0.2); }
+    .p2-meta { font-size: 12px; color: rgba(255,255,255,0.6); }
+    .p2-arrow { font-size: 12px; color: rgba(255,255,255,0.4); }
+
+    .p2-content { padding: 18px 16px; background: #F9FAFB; }
+
+    /* ───────────────────────────────────────────
+       PITCH 3 — Country Identity Card
+    ─────────────────────────────────────────── */
+    .p3-hero {
+      height: 128px;
+      padding: 12px 16px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Australia: navy / red */
+    .p3-au { background: linear-gradient(135deg, #00247D 54%, #CF142B 54%); }
+
+    /* Canada: red / dark red */
+    .p3-ca { background: linear-gradient(135deg, #CC0001 54%, #8B0000 54%); }
+
+    .p3-top {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      position: relative; z-index: 1;
+    }
+
+    .p3-back {
+      width: 36px; height: 36px;
+      background: rgba(0,0,0,0.22);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .p3-bottom {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      position: relative; z-index: 1;
+    }
+
+    .p3-left { flex: 1; min-width: 0; }
+    .p3-country {
+      font-size: 26px;
+      font-weight: 800;
+      color: #fff;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.3);
+      line-height: 1.1;
+      margin-bottom: 3px;
+    }
+    .p3-meta { font-size: 12px; color: rgba(255,255,255,0.7); }
+
+    .p3-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .p3-pill-exploratory { background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.9); }
+    .p3-pill-incomplete   { background: #FEF3C7; color: #92400E; }
+
+    .p3-flag { font-size: 38px; line-height: 1; }
+  </style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Trip Header — Design Options</h1>
+  <p>3 pitches for the trip detail page header. Each shown with two trip states: Exploratory and Incomplete.</p>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     PITCH 1 — COMPACT BAR
+════════════════════════════════════════ -->
+<div class="pitch">
+  <div class="pitch-meta">
+    <div class="pitch-tag">Pitch 1</div>
+    <h2>Compact Functional Bar</h2>
+    <p>No hero. 56px sticky white bar replaces the purple zone entirely. Back arrow · flag circle + country name · status pill. Every pixel goes to content.</p>
+  </div>
+
+  <div class="phones">
+
+    <!-- Australia / Exploratory -->
+    <div class="phone-wrap">
+      <div class="phone-state-label">Exploratory · Australia</div>
+      <div class="phone">
+        <div class="p1-bar">
+          <div class="p1-back">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M12.5 15L7.5 10L12.5 5" stroke="#374151" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="p1-identity">
+            <div class="flag-circle">🇦🇺</div>
+            <span class="p1-name">Australia</span>
+          </div>
+          <span class="pill pill-exploratory">Exploratory</span>
+        </div>
+        <div class="content">
+          <div class="c-country">Australia</div>
+          <div class="c-dates">
+            <div class="c-date-card">
+              <div class="c-date-label">Arrival</div>
+              <div class="c-date-val">28 May</div>
+            </div>
+            <div class="c-date-card">
+              <div class="c-date-label">Departure</div>
+              <div class="c-date-val">30 May</div>
+            </div>
+          </div>
+          <div class="c-meta">Business · 3 Days</div>
+          <div class="c-section-label">Requirements</div>
+          <div class="c-req">
+            <div class="c-req-title">Electronic Travel Authority (ETA)</div>
+            <div class="c-req-sub">Allow 3 days · start by 25 May</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Canada / Incomplete -->
+    <div class="phone-wrap">
+      <div class="phone-state-label">Incomplete · Canada</div>
+      <div class="phone">
+        <div class="p1-bar">
+          <div class="p1-back">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M12.5 15L7.5 10L12.5 5" stroke="#374151" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="p1-identity">
+            <div class="flag-circle">🇨🇦</div>
+            <span class="p1-name">Canada</span>
+          </div>
+          <span class="pill pill-incomplete">⚠ Incomplete</span>
+        </div>
+        <div class="content">
+          <div class="c-country">Canada</div>
+          <div class="c-dates">
+            <div class="c-date-card">
+              <div class="c-date-label">Arrival</div>
+              <div class="c-date-val">15 Jun</div>
+            </div>
+            <div class="c-date-card">
+              <div class="c-date-label">Departure</div>
+              <div class="c-date-val">18 Jun</div>
+            </div>
+          </div>
+          <div class="c-meta">Business · 4 Days</div>
+          <div class="c-section-label">Compliance</div>
+          <div class="c-req">
+            <div class="c-req-title">eTA (Electronic Travel Authorisation)</div>
+            <div class="c-req-sub">1 of 2 steps done · Allow 3 days</div>
+          </div>
+          <div class="c-req">
+            <div class="c-req-title">Manager Approval</div>
+            <div class="c-req-sub">Not started</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     PITCH 2 — INFORMATION-RICH HERO
+════════════════════════════════════════ -->
+<div class="pitch">
+  <div class="pitch-meta">
+    <div class="pitch-tag">Pitch 2</div>
+    <h2>Information-Rich Hero</h2>
+    <p>Keeps the hero zone but fills it. Flag inline with country name. Dates and trip type in the hero so the user is fully oriented before scrolling. Darker purple with dot texture.</p>
+  </div>
+
+  <div class="phones">
+
+    <!-- Australia / Exploratory -->
+    <div class="phone-wrap">
+      <div class="phone-state-label">Exploratory · Australia</div>
+      <div class="phone">
+        <div class="p2-hero">
+          <div class="p2-top">
+            <div class="p2-back">
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                <path d="M12.5 15L7.5 10L12.5 5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="p2-more">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="4.5" r="1.3" fill="rgba(255,255,255,0.5)"/>
+                <circle cx="10" cy="10" r="1.3" fill="rgba(255,255,255,0.5)"/>
+                <circle cx="10" cy="15.5" r="1.3" fill="rgba(255,255,255,0.5)"/>
+              </svg>
+            </div>
+          </div>
+          <div class="p2-middle">
+            <div class="flag-rect">🇦🇺</div>
+            <span class="p2-country">Australia</span>
+            <span class="pill p2-pill-exploratory">Exploratory</span>
+          </div>
+          <div class="p2-bottom">
+            <div class="p2-chip">28 May</div>
+            <span class="p2-arrow">›</span>
+            <div class="p2-chip">30 May</div>
+            <div class="p2-divider"></div>
+            <span class="p2-meta">Business · 3 Days</span>
+          </div>
+        </div>
+        <div class="p2-content">
+          <div class="c-section-label">Requirements</div>
+          <div class="c-req">
+            <div class="c-req-title">Electronic Travel Authority (ETA)</div>
+            <div class="c-req-sub">Allow 3 days · start by 25 May</div>
+          </div>
+          <div class="c-req">
+            <div class="c-req-title">Passport validity</div>
+            <div class="c-req-sub">Auto-verified</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Canada / Incomplete -->
+    <div class="phone-wrap">
+      <div class="phone-state-label">Incomplete · Canada</div>
+      <div class="phone">
+        <div class="p2-hero">
+          <div class="p2-top">
+            <div class="p2-back">
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                <path d="M12.5 15L7.5 10L12.5 5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="p2-more">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="4.5" r="1.3" fill="rgba(255,255,255,0.5)"/>
+                <circle cx="10" cy="10" r="1.3" fill="rgba(255,255,255,0.5)"/>
+                <circle cx="10" cy="15.5" r="1.3" fill="rgba(255,255,255,0.5)"/>
+              </svg>
+            </div>
+          </div>
+          <div class="p2-middle">
+            <div class="flag-rect">🇨🇦</div>
+            <span class="p2-country">Canada</span>
+            <span class="pill p2-pill-incomplete">⚠ Incomplete</span>
+          </div>
+          <div class="p2-bottom">
+            <div class="p2-chip">15 Jun</div>
+            <span class="p2-arrow">›</span>
+            <div class="p2-chip">18 Jun</div>
+            <div class="p2-divider"></div>
+            <span class="p2-meta">Business · 4 Days</span>
+          </div>
+        </div>
+        <div class="p2-content">
+          <div class="c-section-label">Compliance</div>
+          <div class="c-req">
+            <div class="c-req-title">eTA (Electronic Travel Authorisation)</div>
+            <div class="c-req-sub">1 of 2 steps done · Allow 3 days</div>
+          </div>
+          <div class="c-req">
+            <div class="c-req-title">Manager Approval</div>
+            <div class="c-req-sub">Not started</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     PITCH 3 — COUNTRY IDENTITY CARD
+════════════════════════════════════════ -->
+<div class="pitch">
+  <div class="pitch-meta">
+    <div class="pitch-tag">Pitch 3</div>
+    <h2>Country Identity Card</h2>
+    <p>Diagonal two-colour split from flag colours (hardcoded per country). Country name + trip meta bottom-left. Flag as a "seal" bottom-right. Every trip looks instantly distinct.</p>
+  </div>
+
+  <div class="phones">
+
+    <!-- Australia / Exploratory -->
+    <div class="phone-wrap">
+      <div class="phone-state-label">Exploratory · Australia</div>
+      <div class="phone">
+        <div class="p3-hero p3-au">
+          <div class="p3-top">
+            <div class="p3-back">
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                <path d="M12.5 15L7.5 10L12.5 5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="p3-bottom">
+            <div class="p3-left">
+              <div class="p3-country">Australia</div>
+              <div class="p3-meta">Business · 3 Days</div>
+            </div>
+            <div class="p3-right">
+              <span class="pill p3-pill-exploratory">Exploratory</span>
+              <span class="p3-flag">🇦🇺</span>
+            </div>
+          </div>
+        </div>
+        <div class="content">
+          <div class="c-dates">
+            <div class="c-date-card">
+              <div class="c-date-label">Arrival</div>
+              <div class="c-date-val">28 May</div>
+            </div>
+            <div class="c-date-card">
+              <div class="c-date-label">Departure</div>
+              <div class="c-date-val">30 May</div>
+            </div>
+          </div>
+          <div style="height:14px"></div>
+          <div class="c-section-label">Requirements</div>
+          <div class="c-req">
+            <div class="c-req-title">Electronic Travel Authority (ETA)</div>
+            <div class="c-req-sub">Allow 3 days · start by 25 May</div>
+          </div>
+          <div class="c-req">
+            <div class="c-req-title">Passport validity</div>
+            <div class="c-req-sub">Auto-verified</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Canada / Incomplete -->
+    <div class="phone-wrap">
+      <div class="phone-state-label">Incomplete · Canada</div>
+      <div class="phone">
+        <div class="p3-hero p3-ca">
+          <div class="p3-top">
+            <div class="p3-back">
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                <path d="M12.5 15L7.5 10L12.5 5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="p3-bottom">
+            <div class="p3-left">
+              <div class="p3-country">Canada</div>
+              <div class="p3-meta">Business · 4 Days</div>
+            </div>
+            <div class="p3-right">
+              <span class="pill p3-pill-incomplete">⚠ Incomplete</span>
+              <span class="p3-flag">🇨🇦</span>
+            </div>
+          </div>
+        </div>
+        <div class="content">
+          <div class="c-dates">
+            <div class="c-date-card">
+              <div class="c-date-label">Arrival</div>
+              <div class="c-date-val">15 Jun</div>
+            </div>
+            <div class="c-date-card">
+              <div class="c-date-label">Departure</div>
+              <div class="c-date-val">18 Jun</div>
+            </div>
+          </div>
+          <div style="height:14px"></div>
+          <div class="c-section-label">Compliance</div>
+          <div class="c-req">
+            <div class="c-req-title">eTA (Electronic Travel Authorisation)</div>
+            <div class="c-req-sub">1 of 2 steps done · Allow 3 days</div>
+          </div>
+          <div class="c-req">
+            <div class="c-req-title">Manager Approval</div>
+            <div class="c-req-sub">Not started</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

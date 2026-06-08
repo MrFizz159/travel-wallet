@@ -4,101 +4,71 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { runAssessment } from '@/lib/assessment/stub'
-import { subtractDays, addDays, computeComplianceStatus } from '@/lib/compliance'
+import { runTransitCheck, getTransitSubTasks, getTransitGuidance } from '@/lib/assessment/transit'
+import { subtractDays, addDays, computeLegComplianceStatus } from '@/lib/compliance'
 import { syncComplianceStatus } from './_utils'
 
-export async function createTrip(formData: FormData) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth')
-
-  const destination_country = formData.get('destination_country') as string
-  const destination_country_code = formData.get('destination_country_code') as string
-  const start_date = formData.get('start_date') as string
-  const end_date = formData.get('end_date') as string
-  const purpose = formData.get('purpose') as string
-  const passport_id = (formData.get('passport_id') as string) || null
-  const is_historical = formData.get('is_historical') === 'true'
-  const assessment_result = formData.get('assessment_result') as string
-
-  const { data: trip, error } = await supabase
-    .from('trips')
-    .insert({
-      user_id: user.id,
-      destination_country,
-      destination_country_code,
-      start_date,
-      end_date,
-      purpose,
-      passport_id,
-      is_historical,
-      assessment_result,
-      state: is_historical ? 'completed' : 'exploratory',
-    })
-    .select()
-    .single()
-
-  if (error) throw new Error(error.message)
-
-  redirect(`/trips`)
+// Payload shapes expected from the itinerary form (JSON-encoded in FormData)
+type LegPayload = {
+  destination_country: string
+  destination_country_code: string
+  start_date: string
+  end_date: string
+  purpose: string
+  passport_id: string
+  assessment_result: string
 }
 
-export async function createAndActivateTrip(formData: FormData) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth')
+type TransitPayload = {
+  sort_order: number
+  transit_country: string
+  transit_country_code: string
+  transit_date: string
+  visa_required: boolean | null
+  authorisation_name: string | null
+  transit_note: string | null
+  checked_at: string | null
+  time_required_days: number
+}
 
-  const destination_country = formData.get('destination_country') as string
-  const destination_country_code = formData.get('destination_country_code') as string
-  const start_date = formData.get('start_date') as string
-  const end_date = formData.get('end_date') as string
-  const purpose = formData.get('purpose') as string
-  const passport_id = (formData.get('passport_id') as string) || null
-  const assessment_result = formData.get('assessment_result') as string
+function daysBetween(start: string, end: string): number {
+  const s = new Date(start + 'T00:00:00')
+  const e = new Date(end + 'T00:00:00')
+  return Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1)
+}
 
-  const { data: trip, error } = await supabase
-    .from('trips')
-    .insert({
-      user_id: user.id,
-      destination_country,
-      destination_country_code,
-      start_date,
-      end_date,
-      purpose,
-      passport_id,
-      is_historical: false,
-      assessment_result,
-      state: 'active',
-      activated_at: new Date().toISOString(),
-    })
-    .select()
+// Insert requirements + sub_tasks for a single leg. Sequential — never batch
+// across legs to avoid name-collision in the find-by-name sub_task match.
+async function insertLegRequirements(
+  supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>,
+  tripId: string,
+  legId: string,
+  legStartDate: string,
+  legEndDate: string,
+  passportId: string | null,
+) {
+  const leg = await supabase
+    .from('trip_legs')
+    .select('destination_country_code')
+    .eq('id', legId)
     .single()
+  if (!leg.data) return []
 
-  if (error) throw new Error(error.message)
+  const assessment = runAssessment(leg.data.destination_country_code)
+  if (assessment.requirements.length === 0) return []
 
-  let passport: { expiry_date: string } | null = null
-  if (passport_id) {
-    const { data } = await supabase
-      .from('passports')
-      .select('expiry_date')
-      .eq('id', passport_id)
-      .single()
-    passport = data
-  }
-
-  const assessment = runAssessment(destination_country_code)
-
-  const { data: insertedRequirements } = await supabase
+  const { data: insertedReqs } = await supabase
     .from('requirements')
     .insert(assessment.requirements.map(stubReq => ({
-      trip_id: trip.id,
+      trip_id: tripId,
+      leg_id: legId,
       name: stubReq.name,
       type: stubReq.type,
       is_mandatory: stubReq.is_mandatory,
       status: 'not_started',
       time_required_days: stubReq.time_required_days,
       latest_start_date: stubReq.time_required_days > 0
-        ? subtractDays(start_date, stubReq.time_required_days)
+        ? subtractDays(legStartDate, stubReq.time_required_days)
         : null,
       why_it_applies: stubReq.why_it_applies,
       guidance: stubReq.guidance,
@@ -107,11 +77,21 @@ export async function createAndActivateTrip(formData: FormData) {
     })))
     .select()
 
-  if (!insertedRequirements) throw new Error('Failed to insert requirements')
+  if (!insertedReqs || insertedReqs.length === 0) return []
 
-  const minExpiry = addDays(end_date, 180)
+  let passport: { expiry_date: string } | null = null
+  if (passportId) {
+    const { data } = await supabase
+      .from('passports')
+      .select('expiry_date')
+      .eq('id', passportId)
+      .single()
+    passport = data
+  }
+
+  const minExpiry = addDays(legEndDate, 180)
   const subTaskPayloads = assessment.requirements.flatMap(stubReq => {
-    const req = insertedRequirements.find(r => r.name === stubReq.name)
+    const req = insertedReqs.find(r => r.name === stubReq.name)
     if (!req) return []
     return stubReq.sub_tasks.map(stubTask => ({
       requirement_id: req.id,
@@ -125,35 +105,253 @@ export async function createAndActivateTrip(formData: FormData) {
     }))
   })
 
-  const [, { data: managerReq }] = await Promise.all([
-    subTaskPayloads.length > 0
-      ? supabase.from('sub_tasks').insert(subTaskPayloads)
-      : Promise.resolve(null),
-    supabase.from('requirements').insert({
-      trip_id: trip.id,
-      name: 'Manager Approval',
-      type: 'manager_approval',
-      is_mandatory: true,
-      status: 'not_started',
-      time_required_days: 0,
-      latest_start_date: null,
-      why_it_applies: 'Your organisation requires manager sign-off before travel can proceed.',
-      guidance: 'Select your manager and send a request for approval. Your trip cannot be marked compliant until this is approved.',
-      external_link: null,
-      what_you_need: null,
-      approval_state: 'unsent',
-      approver_name: null,
-      approval_log: [],
-    }).select().single(),
-  ])
+  if (subTaskPayloads.length > 0) {
+    await supabase.from('sub_tasks').insert(subTaskPayloads)
+  }
 
-  const allRequirements = [...insertedRequirements, ...(managerReq ? [managerReq] : [])]
-  const complianceStatus = computeComplianceStatus(allRequirements)
+  return insertedReqs
+}
 
-  await supabase
+// Insert a Requirement + sub_tasks for each transit that requires a visa/eTA.
+// Transits with visa_required !== true are skipped — they need no compliance record.
+async function insertTransitRequirements(
+  supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>,
+  tripId: string,
+  transits: Array<{
+    id: string
+    transit_country_code: string
+    transit_date: string | null
+    visa_required: boolean | null
+    authorisation_name: string | null
+    transit_note: string | null
+    time_required_days: number
+  }>,
+  passportId: string | null,
+) {
+  let passport: { expiry_date: string } | null = null
+  if (passportId) {
+    const { data } = await supabase
+      .from('passports')
+      .select('expiry_date')
+      .eq('id', passportId)
+      .single()
+    passport = data
+  }
+
+  for (const transit of transits) {
+    if (transit.visa_required !== true) continue
+
+    const days = transit.time_required_days ?? 0
+    const latestStartDate = (transit.transit_date && days > 0)
+      ? subtractDays(transit.transit_date, days)
+      : null
+
+    const guidance = getTransitGuidance(transit.transit_country_code)
+    const reqName = transit.authorisation_name ?? 'Transit authorisation'
+
+    const { data: insertedReq } = await supabase
+      .from('requirements')
+      .insert({
+        trip_id: tripId,
+        leg_id: null,
+        transit_id: transit.id,
+        name: reqName,
+        type: 'transit_eta',
+        is_mandatory: true,
+        status: 'not_started',
+        time_required_days: days,
+        latest_start_date: latestStartDate,
+        why_it_applies: transit.transit_note ?? null,
+        guidance: guidance.guidance,
+        external_link: guidance.external_link,
+        what_you_need: guidance.what_you_need,
+      })
+      .select()
+      .single()
+
+    if (!insertedReq) continue
+
+    const subTasks = getTransitSubTasks(transit.authorisation_name)
+    const minExpiry = transit.transit_date ? addDays(transit.transit_date, 180) : null
+
+    const subTaskPayloads = subTasks.map(task => ({
+      requirement_id: insertedReq.id,
+      name: task.name,
+      type: task.type,
+      status: (task.type === 'automated' && passport && minExpiry && passport.expiry_date >= minExpiry)
+        ? 'complete' as const
+        : 'pending' as const,
+      sort_order: task.sort_order,
+      description: task.description ?? null,
+    }))
+
+    if (subTaskPayloads.length > 0) {
+      await supabase.from('sub_tasks').insert(subTaskPayloads)
+    }
+  }
+}
+
+// ── Public actions ────────────────────────────────────────────────────────────
+
+export async function createTrip(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth')
+
+  const legs = JSON.parse(formData.get('legs') as string) as LegPayload[]
+  const transitsRaw = formData.get('transits') as string | null
+  const transits: TransitPayload[] = transitsRaw ? JSON.parse(transitsRaw) : []
+  const is_historical = formData.get('is_historical') === 'true'
+
+  const { data: trip, error } = await supabase
     .from('trips')
-    .update({ compliance_status: complianceStatus })
-    .eq('id', trip.id)
+    .insert({
+      user_id: user.id,
+      is_historical,
+      state: is_historical ? 'completed' : 'exploratory',
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  await supabase.from('trip_legs').insert(
+    legs.map((leg, i) => ({
+      trip_id: trip.id,
+      destination_country: leg.destination_country,
+      destination_country_code: leg.destination_country_code,
+      start_date: leg.start_date,
+      end_date: leg.end_date,
+      duration_days: daysBetween(leg.start_date, leg.end_date),
+      purpose: leg.purpose,
+      passport_id: leg.passport_id || null,
+      assessment_result: leg.assessment_result,
+      sort_order: i,
+    }))
+  )
+
+  // Persist transit rows for exploratory trips (requirements created at activation)
+  if (transits.length > 0) {
+    await supabase.from('trip_transits').insert(
+      transits.map(t => ({
+        trip_id: trip.id,
+        transit_country: t.transit_country,
+        transit_country_code: t.transit_country_code,
+        transit_date: t.transit_date || null,
+        sort_order: t.sort_order,
+        visa_required: t.visa_required ?? null,
+        authorisation_name: t.authorisation_name ?? null,
+        transit_note: t.transit_note ?? null,
+        checked_at: t.checked_at ?? null,
+        time_required_days: t.time_required_days ?? 0,
+      }))
+    )
+  }
+
+  redirect('/trips')
+}
+
+export async function createAndActivateTrip(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth')
+
+  const legs = JSON.parse(formData.get('legs') as string) as LegPayload[]
+  const transits = JSON.parse(formData.get('transits') as string) as TransitPayload[]
+
+  // 1. Create trip container
+  const { data: trip, error } = await supabase
+    .from('trips')
+    .insert({
+      user_id: user.id,
+      is_historical: false,
+      state: 'active',
+      activated_at: new Date().toISOString(),
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  // 2. Insert all legs
+  const { data: insertedLegs } = await supabase
+    .from('trip_legs')
+    .insert(legs.map((leg, i) => ({
+      trip_id: trip.id,
+      destination_country: leg.destination_country,
+      destination_country_code: leg.destination_country_code,
+      start_date: leg.start_date,
+      end_date: leg.end_date,
+      duration_days: daysBetween(leg.start_date, leg.end_date),
+      purpose: leg.purpose,
+      passport_id: leg.passport_id || null,
+      assessment_result: leg.assessment_result,
+      sort_order: i,
+    })))
+    .select()
+
+  if (!insertedLegs) throw new Error('Failed to insert legs')
+
+  // 3. For each leg: insert requirements + sub_tasks (sequential — see gotcha note)
+  for (let i = 0; i < insertedLegs.length; i++) {
+    const dbLeg = insertedLegs[i]
+    const formLeg = legs[i]
+    const insertedReqs = await insertLegRequirements(
+      supabase, trip.id, dbLeg.id,
+      dbLeg.start_date, dbLeg.end_date,
+      formLeg.passport_id || null
+    )
+    const legStatus = computeLegComplianceStatus(insertedReqs)
+    await supabase.from('trip_legs').update({ compliance_status: legStatus }).eq('id', dbLeg.id)
+  }
+
+  // 4. Manager approval — trip-level (leg_id = null, transit_id = null)
+  await supabase.from('requirements').insert({
+    trip_id: trip.id,
+    leg_id: null,
+    name: 'Manager Approval',
+    type: 'manager_approval',
+    is_mandatory: true,
+    status: 'not_started',
+    time_required_days: 0,
+    latest_start_date: null,
+    why_it_applies: 'Your organisation requires manager sign-off before travel can proceed.',
+    guidance: 'Select your manager and send a request for approval. Your trip cannot be marked compliant until this is approved.',
+    external_link: null,
+    what_you_need: null,
+    approval_state: 'unsent',
+    approver_name: null,
+    approval_log: [],
+  })
+
+  // 5. Insert transit rows and create requirements for those needing authorisation
+  if (transits.length > 0) {
+    const { data: insertedTransits } = await supabase
+      .from('trip_transits')
+      .insert(
+        transits.map(t => ({
+          trip_id: trip.id,
+          transit_country: t.transit_country,
+          transit_country_code: t.transit_country_code,
+          transit_date: t.transit_date || null,
+          sort_order: t.sort_order,
+          visa_required: t.visa_required ?? null,
+          authorisation_name: t.authorisation_name ?? null,
+          transit_note: t.transit_note ?? null,
+          checked_at: t.checked_at ?? null,
+          time_required_days: t.time_required_days ?? 0,
+        }))
+      )
+      .select()
+
+    if (insertedTransits && insertedTransits.length > 0) {
+      const firstLegPassportId = legs[0]?.passport_id || null
+      await insertTransitRequirements(supabase, trip.id, insertedTransits, firstLegPassportId)
+    }
+  }
+
+  // 6. Compute overall trip compliance
+  await syncComplianceStatus(supabase, trip.id, user.id)
 
   revalidatePath(`/trips/${trip.id}`)
   revalidatePath('/trips')
@@ -167,103 +365,69 @@ export async function activateTrip(formData: FormData) {
 
   const tripId = formData.get('tripId') as string
 
+  // Verify ownership
   const { data: trip } = await supabase
     .from('trips')
-    .select('*')
+    .select('id, state')
     .eq('id', tripId)
     .eq('user_id', user.id)
     .single()
-
   if (!trip) throw new Error('Trip not found')
 
-  let passport: { expiry_date: string } | null = null
-  if (trip.passport_id) {
-    const { data } = await supabase
-      .from('passports')
-      .select('expiry_date')
-      .eq('id', trip.passport_id)
-      .single()
-    passport = data
+  // Fetch legs (created at exploratory stage)
+  const { data: legs } = await supabase
+    .from('trip_legs')
+    .select('*')
+    .eq('trip_id', tripId)
+    .order('sort_order')
+
+  for (const leg of legs ?? []) {
+    const insertedReqs = await insertLegRequirements(
+      supabase, tripId, leg.id,
+      leg.start_date, leg.end_date,
+      leg.passport_id
+    )
+    const legStatus = computeLegComplianceStatus(insertedReqs)
+    await supabase.from('trip_legs').update({ compliance_status: legStatus }).eq('id', leg.id)
   }
 
-  const assessment = runAssessment(trip.destination_country_code)
-
-  // Batch insert all assessment requirements in one call
-  const { data: insertedRequirements } = await supabase
-    .from('requirements')
-    .insert(assessment.requirements.map(stubReq => ({
-      trip_id: tripId,
-      name: stubReq.name,
-      type: stubReq.type,
-      is_mandatory: stubReq.is_mandatory,
-      status: 'not_started',
-      time_required_days: stubReq.time_required_days,
-      latest_start_date: stubReq.time_required_days > 0
-        ? subtractDays(trip.start_date, stubReq.time_required_days)
-        : null,
-      why_it_applies: stubReq.why_it_applies,
-      guidance: stubReq.guidance,
-      external_link: stubReq.external_link ?? null,
-      what_you_need: stubReq.what_you_need ?? null,
-    })))
-    .select()
-
-  if (!insertedRequirements) throw new Error('Failed to insert requirements')
-
-  // Build sub_task payloads using returned requirement IDs, matched by name
-  const minExpiry = addDays(trip.end_date, 180)
-  const subTaskPayloads = assessment.requirements.flatMap(stubReq => {
-    const req = insertedRequirements.find(r => r.name === stubReq.name)
-    if (!req) return []
-    return stubReq.sub_tasks.map(stubTask => ({
-      requirement_id: req.id,
-      name: stubTask.name,
-      type: stubTask.type,
-      // Automated passport validity check: must be valid 6 months beyond return date
-      status: (stubTask.type === 'automated' && passport && passport.expiry_date >= minExpiry)
-        ? 'complete' as const
-        : 'pending' as const,
-      sort_order: stubTask.sort_order,
-      description: stubTask.description ?? null,
-    }))
+  // Manager approval
+  await supabase.from('requirements').insert({
+    trip_id: tripId,
+    leg_id: null,
+    name: 'Manager Approval',
+    type: 'manager_approval',
+    is_mandatory: true,
+    status: 'not_started',
+    time_required_days: 0,
+    latest_start_date: null,
+    why_it_applies: 'Your organisation requires manager sign-off before travel can proceed.',
+    guidance: 'Select your manager and send a request for approval. Your trip cannot be marked compliant until this is approved.',
+    external_link: null,
+    what_you_need: null,
+    approval_state: 'unsent',
+    approver_name: null,
+    approval_log: [],
   })
 
-  // Batch insert sub_tasks and manager approval requirement in parallel
-  const [, { data: managerReq }] = await Promise.all([
-    subTaskPayloads.length > 0
-      ? supabase.from('sub_tasks').insert(subTaskPayloads)
-      : Promise.resolve(null),
-    supabase.from('requirements').insert({
-      trip_id: tripId,
-      name: 'Manager Approval',
-      type: 'manager_approval',
-      is_mandatory: true,
-      status: 'not_started',
-      time_required_days: 0,
-      latest_start_date: null,
-      why_it_applies: 'Your organisation requires manager sign-off before travel can proceed.',
-      guidance: 'Select your manager and send a request for approval. Your trip cannot be marked compliant until this is approved.',
-      external_link: null,
-      what_you_need: null,
-      approval_state: 'unsent',
-      approver_name: null,
-      approval_log: [],
-    }).select().single(),
-  ])
+  // Fetch existing transit rows and create requirements for those needing authorisation
+  const { data: existingTransits } = await supabase
+    .from('trip_transits')
+    .select('*')
+    .eq('trip_id', tripId)
 
-  // Compute compliance status from in-memory data — no re-fetch needed
-  const allRequirements = [...insertedRequirements, ...(managerReq ? [managerReq] : [])]
-  const complianceStatus = computeComplianceStatus(allRequirements)
+  if (existingTransits && existingTransits.length > 0) {
+    const firstLegPassportId = legs?.[0]?.passport_id ?? null
+    await insertTransitRequirements(supabase, tripId, existingTransits, firstLegPassportId)
+  }
 
   await supabase
     .from('trips')
-    .update({
-      state: 'active',
-      activated_at: new Date().toISOString(),
-      compliance_status: complianceStatus,
-    })
+    .update({ state: 'active', activated_at: new Date().toISOString() })
     .eq('id', tripId)
     .eq('user_id', user.id)
+
+  await syncComplianceStatus(supabase, tripId, user.id)
 
   revalidatePath(`/trips/${tripId}`)
   revalidatePath('/trips')
@@ -279,16 +443,13 @@ export async function cancelTrip(formData: FormData) {
 
   const { data: trip } = await supabase
     .from('trips')
-    .select('*')
+    .select('state')
     .eq('id', tripId)
     .eq('user_id', user.id)
     .single()
 
   if (!trip) throw new Error('Trip not found')
-
-  if (trip.state === 'completed' || trip.state === 'cancelled') {
-    redirect('/trips')
-  }
+  if (trip.state === 'completed' || trip.state === 'cancelled') redirect('/trips')
 
   await supabase
     .from('trips')
@@ -301,7 +462,100 @@ export async function cancelTrip(formData: FormData) {
   redirect('/trips')
 }
 
-const AUTH_REQ_TYPES = ['visa', 'eta', 'residence_permit', 'right_to_work']
+export async function checkTransit(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth')
+
+  const transitId = formData.get('transitId') as string
+  const tripId = formData.get('tripId') as string
+
+  // Fetch transit row
+  const { data: transit } = await supabase
+    .from('trip_transits')
+    .select('transit_country_code, trip_id')
+    .eq('id', transitId)
+    .single()
+  if (!transit) throw new Error('Transit not found')
+
+  // Fetch traveller nationality from profile
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('nationality')
+    .eq('id', user.id)
+    .single()
+
+  // Nationality stored as country name in profiles — look up code from primary passport
+  const { data: passport } = await supabase
+    .from('passports')
+    .select('nationality')
+    .eq('user_id', user.id)
+    .eq('is_primary', true)
+    .single()
+
+  const nationalityName = passport?.nationality ?? profile?.nationality ?? 'Unknown'
+
+  const result = await runTransitCheck(transit.transit_country_code, nationalityName)
+
+  await supabase
+    .from('trip_transits')
+    .update({
+      visa_required: result.visa_required,
+      authorisation_name: result.authorisation_name ?? null,
+      transit_note: result.reason,
+      checked_at: new Date().toISOString(),
+      time_required_days: result.time_required_days,
+    })
+    .eq('id', transitId)
+
+  await syncComplianceStatus(supabase, tripId, user.id)
+
+  revalidatePath(`/trips/${tripId}`)
+}
+
+export async function confirmTransitVisa(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth')
+
+  const transitId = formData.get('transitId') as string
+  const tripId = formData.get('tripId') as string
+
+  await supabase
+    .from('trip_transits')
+    .update({ user_confirmed: true })
+    .eq('id', transitId)
+
+  await syncComplianceStatus(supabase, tripId, user.id)
+
+  revalidatePath(`/trips/${tripId}`)
+}
+
+// Pre-save transit check — called from the intake form before any trip is created.
+// Returns the check result without writing to DB.
+export async function previewTransitCheck(transitCountryCode: string): Promise<import('@/lib/assessment/transit').TransitCheckResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { visa_required: true, authorisation_name: null, reason: 'Not authenticated', confidence: 'low', time_required_days: 0 }
+
+  const { data: passport } = await supabase
+    .from('passports')
+    .select('nationality')
+    .eq('user_id', user.id)
+    .eq('is_primary', true)
+    .single()
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('nationality')
+    .eq('id', user.id)
+    .single()
+
+  const nationality = passport?.nationality ?? profile?.nationality ?? 'Unknown'
+  return runTransitCheck(transitCountryCode, nationality)
+}
+
+const AUTH_REQ_TYPES = ['visa', 'eta', 'transit_eta', 'residence_permit', 'right_to_work']
 
 export async function uploadEvidence(formData: FormData) {
   const supabase = await createClient()
@@ -346,22 +600,52 @@ export async function uploadEvidence(formData: FormData) {
     .single()
 
   if (isAuthType && issueDate && expiryDate && authName && doc) {
-    const { data: trip } = await supabase
-      .from('trips')
-      .select('destination_country, destination_country_code')
-      .eq('id', tripId)
+    const { data: reqData } = await supabase
+      .from('requirements')
+      .select('leg_id, transit_id')
+      .eq('id', requirementId)
       .single()
-    if (trip) {
-      await supabase.from('authorizations').insert({
-        user_id: user.id,
-        name: authName,
-        country: trip.destination_country,
-        country_code: trip.destination_country_code,
-        issue_date: issueDate,
-        expiry_date: expiryDate,
-        document_id: doc.id,
-      })
-      revalidatePath('/wallet')
+
+    if (reqData?.leg_id) {
+      // Destination leg requirement — look up via leg
+      const { data: legData } = await supabase
+        .from('trip_legs')
+        .select('destination_country, destination_country_code')
+        .eq('id', reqData.leg_id)
+        .single()
+
+      if (legData) {
+        await supabase.from('authorizations').insert({
+          user_id: user.id,
+          name: authName,
+          country: legData.destination_country,
+          country_code: legData.destination_country_code,
+          issue_date: issueDate,
+          expiry_date: expiryDate,
+          document_id: doc.id,
+        })
+        revalidatePath('/wallet')
+      }
+    } else if (reqData?.transit_id) {
+      // Transit requirement — look up via transit stop
+      const { data: transitData } = await supabase
+        .from('trip_transits')
+        .select('transit_country, transit_country_code')
+        .eq('id', reqData.transit_id)
+        .single()
+
+      if (transitData) {
+        await supabase.from('authorizations').insert({
+          user_id: user.id,
+          name: authName,
+          country: transitData.transit_country,
+          country_code: transitData.transit_country_code,
+          issue_date: issueDate,
+          expiry_date: expiryDate,
+          document_id: doc.id,
+        })
+        revalidatePath('/wallet')
+      }
     }
   }
 
@@ -422,7 +706,6 @@ export async function generateLetter(formData: FormData) {
   const requirementId = formData.get('requirementId') as string
   const tripId = formData.get('tripId') as string
 
-  // Stub: stores placeholder content so the step advances to "generated" state
   const content = `[Generated letter — download and have it signed, then upload the signed copy to complete this step.]`
 
   await supabase

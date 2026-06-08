@@ -55,27 +55,51 @@ export interface Passport {
   created_at: string
 }
 
-export interface Trip {
+export interface TripLeg {
   id: string
-  user_id: string
-  origin_country: string | null
-  origin_country_code: string | null
+  trip_id: string
   destination_country: string
   destination_country_code: string
   start_date: string
   end_date: string
   duration_days: number
   purpose: TripPurpose
-  state: TripState
-  compliance_status: ComplianceStatus | null
   passport_id: string | null
   assessment_result: AssessmentResult | null
+  compliance_status: ComplianceStatus | null
+  sort_order: number
+  created_at: string
+}
+
+export interface TransitStop {
+  id: string
+  trip_id: string
+  transit_country: string
+  transit_country_code: string
+  transit_date: string | null
+  sort_order: number
+  visa_required: boolean | null
+  authorisation_name: string | null
+  transit_note: string | null
+  checked_at: string | null
+  user_confirmed: boolean
+  time_required_days?: number
+  created_at: string
+}
+
+export interface Trip {
+  id: string
+  user_id: string
+  origin_country: string | null
+  origin_country_code: string | null
+  state: TripState
+  compliance_status: ComplianceStatus | null
   is_historical: boolean
   created_at: string
   activated_at: string | null
 }
 
-export type RequirementType = 'visa' | 'eta' | 'manager_approval' | 'letter'
+export type RequirementType = 'visa' | 'eta' | 'transit_eta' | 'manager_approval' | 'letter'
 
 export type CaseStatus =
   | 'Case Initiated'
@@ -90,6 +114,8 @@ export type CaseStatus =
 export interface Requirement {
   id: string
   trip_id: string
+  leg_id: string | null
+  transit_id?: string | null
   name: string
   type: RequirementType
   is_mandatory: boolean
