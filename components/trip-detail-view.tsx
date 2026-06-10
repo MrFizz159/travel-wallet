@@ -3,7 +3,7 @@
 import { useState, useTransition, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { CheckCircle, AlertTriangle, ArrowLeft, MoreVertical } from 'lucide-react'
+import { CheckCircle, AlertTriangle, ArrowLeft, MoreVertical, ChevronDown } from 'lucide-react'
 import { countryFlag } from '@/lib/countries'
 import { runAssessment } from '@/lib/assessment/stub'
 import { activateTrip } from '@/app/actions/trips'
@@ -61,49 +61,90 @@ function ComplianceChip({ status }: { status: string | null }) {
   )
 }
 
-// ── Transit section header (shared) ──────────────────────────────────────────
-
-function TransitSectionHeader({ transit }: { transit: TransitWithRequirement }) {
-  const flag = countryFlag(transit.transit_country_code)
-  return (
-    <div className="flex items-center gap-2 mb-3">
-      <span className="text-lg">{flag}</span>
-      <div className="flex-1">
-        <p className="font-semibold">Transit: {transit.transit_country}</p>
-        {transit.transit_date && (
-          <p className="text-xs text-muted-foreground">{formatDate(transit.transit_date)}</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Transit info row (no authorisation required, or unchecked) ───────────────
+// ── Transit info row (no authorisation required) — light connecting element ──
 
 function TransitInfoRow({ transit }: { transit: TransitWithRequirement }) {
   const noVisaRequired = transit.visa_required === false
 
   return (
-    <section className="mb-6">
-      <TransitSectionHeader transit={transit} />
-      <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-border bg-muted/30">
-        <div className="flex-1 min-w-0">
-          {noVisaRequired && (
-            <p className="text-sm text-status-compliant font-semibold">No authorisation required for this transit.</p>
-          )}
-          {!noVisaRequired && (
-            <p className="text-sm text-muted-foreground">Transit visa check pending.</p>
-          )}
-        </div>
-        <div className="shrink-0">
-          {noVisaRequired && <CheckCircle size={18} className="text-status-compliant" />}
-        </div>
+    <div className="flex items-center gap-3 mb-4">
+      <div className="flex flex-col items-center w-6 shrink-0">
+        <div className="w-px h-2.5 bg-border" />
+        <span className="text-base leading-none">{countryFlag(transit.transit_country_code)}</span>
+        <div className="w-px h-2.5 bg-border" />
       </div>
-    </section>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-muted-foreground font-medium">
+          Transit · {transit.transit_country}
+          {transit.transit_date && ` · ${formatDate(transit.transit_date)}`}
+        </p>
+        {noVisaRequired && (
+          <p className="text-xs text-status-compliant">No authorisation required</p>
+        )}
+        {!noVisaRequired && (
+          <p className="text-xs text-muted-foreground">Transit visa check pending</p>
+        )}
+      </div>
+      {noVisaRequired && <CheckCircle size={14} className="text-status-compliant shrink-0" />}
+    </div>
   )
 }
 
-// ── Transit section (visa/eTA required — full requirement card) ───────────────
+// ── Collapsible requirement card ──────────────────────────────────────────────
+
+function CollapsibleRequirementCard({
+  req,
+  tripId,
+  legStartDate,
+  onOpenReq,
+}: {
+  req: RequirementRow
+  tripId: string
+  legStartDate: string
+  onOpenReq: (req: RequirementRow, startDate: string) => void
+}) {
+  const [isOpen, setIsOpen] = useState(true)
+  const status = effectiveStatus(req) as RequirementStatusValue
+  const sortedSubTasks = [...req.sub_tasks].sort((a, b) => a.sort_order - b.sort_order)
+  const completedCount = sortedSubTasks.filter(t => t.status === 'complete').length
+  const totalCount = sortedSubTasks.length
+  const hasSubTasks = sortedSubTasks.length > 0
+
+  return (
+    <Card>
+      <RequirementRowCard
+        name={req.name}
+        status={status}
+        latestStartDate={req.latest_start_date ?? undefined}
+        timeRequiredDays={req.time_required_days}
+        completedCount={completedCount}
+        totalCount={totalCount}
+        isExpanded={hasSubTasks ? isOpen : undefined}
+        onClick={hasSubTasks ? () => setIsOpen(prev => !prev) : () => onOpenReq(req, legStartDate)}
+      />
+      {hasSubTasks && isOpen && (
+        <>
+          <Divider />
+          <div className="divide-y divide-border">
+            {sortedSubTasks.map(task => (
+              <SubTaskRowConnected
+                key={task.id}
+                task={task}
+                requirementId={req.id}
+                requirementType={req.type}
+                requirementStatus={req.status}
+                tripId={tripId}
+                onOpenDrawer={() => onOpenReq(req, legStartDate)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
+
+// ── Transit section (visa/eTA required — collapsible) ────────────────────────
 
 function TransitSection({
   transit,
@@ -114,8 +155,8 @@ function TransitSection({
   tripId: string
   onOpenReq: (req: RequirementRow, startDate: string) => void
 }) {
+  const [isOpen, setIsOpen] = useState(true)
   const req = transit.requirement!
-  const status = effectiveStatus(req) as RequirementStatusValue
   const sortedSubTasks = [...req.sub_tasks].sort((a, b) => a.sort_order - b.sort_order)
   const completedCount = sortedSubTasks.filter(t => t.status === 'complete').length
   const totalCount = sortedSubTasks.length
@@ -123,38 +164,35 @@ function TransitSection({
 
   return (
     <section className="mb-6">
-      <TransitSectionHeader transit={transit} />
-      <div className="flex flex-col gap-3">
-        <Card>
-          <RequirementRowCard
-            name={req.name}
-            status={status}
-            latestStartDate={req.latest_start_date ?? undefined}
-            timeRequiredDays={req.time_required_days}
-            completedCount={completedCount}
-            totalCount={totalCount}
-            onClick={() => onOpenReq(req, startDate)}
+      <button
+        type="button"
+        onClick={() => setIsOpen(prev => !prev)}
+        className="w-full flex items-center gap-2 mb-3 min-h-[44px]"
+      >
+        <span className="text-lg">{countryFlag(transit.transit_country_code)}</span>
+        <div className="flex-1 text-left">
+          <p className="font-semibold">Transit: {transit.transit_country}</p>
+          <p className="text-xs text-muted-foreground">
+            {transit.transit_date && formatDate(transit.transit_date)}
+            {!isOpen && totalCount > 0 && ` · ${completedCount}/${totalCount} complete`}
+          </p>
+        </div>
+        <ChevronDown
+          size={16}
+          className={cn('text-muted-foreground transition-transform duration-200', isOpen && 'rotate-180')}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="flex flex-col gap-3">
+          <CollapsibleRequirementCard
+            req={req}
+            tripId={tripId}
+            legStartDate={startDate}
+            onOpenReq={onOpenReq}
           />
-          {sortedSubTasks.length > 0 && (
-            <>
-              <Divider />
-              <div className="divide-y divide-border">
-                {sortedSubTasks.map(task => (
-                  <SubTaskRowConnected
-                    key={task.id}
-                    task={task}
-                    requirementId={req.id}
-                    requirementType={req.type}
-                    requirementStatus={req.status}
-                    tripId={tripId}
-                    onOpenDrawer={() => onOpenReq(req, startDate)}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-        </Card>
-      </div>
+        </div>
+      )}
     </section>
   )
 }
@@ -197,88 +235,73 @@ function SubTaskRowConnected({
 function LegSection({
   leg,
   tripId,
-  cases,
   onOpenReq,
 }: {
   leg: LegDetail
   tripId: string
-  cases: TripDetail['cases']
   onOpenReq: (req: RequirementRow, legStartDate: string) => void
 }) {
+  const [isOpen, setIsOpen] = useState(true)
   const reqStatusOrder: Record<string, number> = { at_risk: 0, not_started: 1, in_progress: 2, complete: 3 }
   const sortedReqs = [...leg.requirements].sort((a, b) =>
     (reqStatusOrder[effectiveStatus(a)] ?? 4) - (reqStatusOrder[effectiveStatus(b)] ?? 4)
   )
   const purposeLabel = leg.purpose.charAt(0).toUpperCase() + leg.purpose.slice(1)
   const duration = durationDays(leg.start_date, leg.end_date)
+  const completedReqs = sortedReqs.filter(r => effectiveStatus(r) === 'complete').length
+  const totalReqs = sortedReqs.length
 
   return (
     <section className="mb-6">
-      {/* Leg header */}
-      <div className="flex items-center gap-2 mb-3">
+      {/* Leg header — collapse toggle */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(prev => !prev)}
+        className="w-full flex items-center gap-2 mb-3 min-h-[44px]"
+      >
         <span className="text-lg">{countryFlag(leg.destination_country_code)}</span>
-        <div className="flex-1">
+        <div className="flex-1 text-left">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold">{leg.destination_country}</p>
             {leg.compliance_status && <ComplianceChip status={leg.compliance_status} />}
           </div>
           <p className="text-xs text-muted-foreground">
             {formatDate(leg.start_date)} – {formatDate(leg.end_date)} · {duration} day{duration !== 1 ? 's' : ''} · {purposeLabel}
+            {!isOpen && totalReqs > 0 && ` · ${completedReqs}/${totalReqs} complete`}
           </p>
         </div>
-      </div>
+        <ChevronDown
+          size={16}
+          className={cn('text-muted-foreground transition-transform duration-200 shrink-0', isOpen && 'rotate-180')}
+        />
+      </button>
 
-      {sortedReqs.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {sortedReqs.map(req => {
-            const status = effectiveStatus(req) as RequirementStatusValue
-            const sortedSubTasks = [...req.sub_tasks].sort((a, b) => a.sort_order - b.sort_order)
-            const completedCount = sortedSubTasks.filter(t => t.status === 'complete').length
-            const totalCount = sortedSubTasks.length
-
-            return (
-              <Card key={req.id}>
-                <RequirementRowCard
-                  name={req.name}
-                  status={status}
-                  latestStartDate={req.latest_start_date ?? undefined}
-                  timeRequiredDays={req.time_required_days}
-                  completedCount={completedCount}
-                  totalCount={totalCount}
-                  onClick={() => onOpenReq(req, leg.start_date)}
+      {isOpen && (
+        <>
+          {sortedReqs.length > 0 && (
+            <div className="flex flex-col gap-3">
+              {sortedReqs.map(req => (
+                <CollapsibleRequirementCard
+                  key={req.id}
+                  req={req}
+                  tripId={tripId}
+                  legStartDate={leg.start_date}
+                  onOpenReq={onOpenReq}
                 />
-                {sortedSubTasks.length > 0 && (
-                  <>
-                    <Divider />
-                    <div className="divide-y divide-border">
-                      {sortedSubTasks.map(task => (
-                        <SubTaskRowConnected
-                          key={task.id}
-                          task={task}
-                          requirementId={req.id}
-                          requirementType={req.type}
-                          requirementStatus={req.status}
-                          tripId={tripId}
-                          onOpenDrawer={() => onOpenReq(req, leg.start_date)}
-                        />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </Card>
-            )
-          })}
-        </div>
-      )}
+              ))}
+            </div>
+          )}
 
-      {sortedReqs.length === 0 && (
-        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-status-compliant-bg">
-          <CheckCircle size={18} className="text-status-compliant shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-sm text-status-compliant">No action required</p>
-            <p className="text-sm text-muted-foreground mt-0.5">Your existing documents cover this destination.</p>
-          </div>
-        </div>
+          {sortedReqs.length === 0 && (
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-status-compliant-bg">
+              <CheckCircle size={18} className="text-status-compliant shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-sm text-status-compliant">No action required</p>
+                <p className="text-sm text-muted-foreground mt-0.5">Your existing documents cover this destination.</p>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </section>
   )
@@ -296,6 +319,17 @@ export function TripDetailView({ trip }: Props) {
   const title = tripTitle(legs)
   const tripStartDate = firstLeg?.start_date
   const tripEndDate = lastLeg?.end_date
+
+  const allActiveReqs = trip.state === 'active'
+    ? [
+        ...legs.flatMap(l => l.requirements),
+        ...(trip.transits ?? [])
+          .filter(t => t.visa_required && t.requirement)
+          .map(t => t.requirement!),
+      ]
+    : []
+  const completedReqCount = allActiveReqs.filter(r => effectiveStatus(r) === 'complete').length
+  const totalReqCount = allActiveReqs.length
 
   function handleOpenReq(req: RequirementRow, legStartDate: string) {
     setOpenReq(req)
@@ -354,7 +388,7 @@ export function TripDetailView({ trip }: Props) {
         </div>
 
         {/* Date chips */}
-        <div className="flex items-center gap-1.5 flex-wrap pb-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {tripStartDate && (
             <span className="bg-white/15 rounded-md px-2 py-1 text-xs font-semibold text-white">
               {formatDate(tripStartDate)}
@@ -373,6 +407,13 @@ export function TripDetailView({ trip }: Props) {
             </>
           )}
         </div>
+
+        {/* Progress (active trips only) */}
+        {trip.state === 'active' && totalReqCount > 0 && (
+          <p className="text-xs text-white/50 pb-1">
+            {completedReqCount} of {totalReqCount} requirements complete
+          </p>
+        )}
       </div>
     </div>
   )
@@ -485,7 +526,6 @@ export function TripDetailView({ trip }: Props) {
             <LegSection
               leg={leg}
               tripId={trip.id}
-              cases={trip.cases}
               onOpenReq={handleOpenReq}
             />
           </div>

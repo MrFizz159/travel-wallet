@@ -11,7 +11,7 @@
  */
 
 import React, { type ReactNode, type ButtonHTMLAttributes } from 'react'
-import { ChevronRight, CheckCircle, AlertTriangle, Clock, Loader2, Upload, Briefcase } from 'lucide-react'
+import { ChevronRight, ChevronDown, CheckCircle, AlertTriangle, Clock, Loader2, Upload, Briefcase } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { countryFlagUrl } from '@/lib/countries'
 
@@ -449,6 +449,7 @@ interface RequirementRowProps {
   completedCount?: number
   totalCount?: number
   onClick: () => void
+  isExpanded?: boolean
   className?: string
 }
 
@@ -509,6 +510,7 @@ export function RequirementRow({
   completedCount,
   totalCount,
   onClick,
+  isExpanded,
   className,
 }: RequirementRowProps) {
   return (
@@ -531,7 +533,17 @@ export function RequirementRow({
           totalCount={totalCount}
         />
       </div>
-      <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+      {isExpanded === undefined ? (
+        <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+      ) : (
+        <ChevronDown
+          size={16}
+          className={cn(
+            'text-muted-foreground shrink-0 transition-transform duration-200',
+            isExpanded && 'rotate-180'
+          )}
+        />
+      )}
     </button>
   )
 }
