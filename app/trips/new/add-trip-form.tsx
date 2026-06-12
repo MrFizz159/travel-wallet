@@ -4,10 +4,12 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ChevronRight, CheckCircle, Loader2, Plus, X } from 'lucide-react'
 import { COUNTRIES, countryFlag } from '@/lib/countries'
-import { runAssessment, type AssessmentOutput } from '@/lib/assessment/stub'
+import type { AssessmentOutput } from '@/lib/assessment/stub'
+import { previewAssessment } from '@/app/actions/assessment'
 import { createTrip, createAndActivateTrip, previewTransitCheck } from '@/app/actions/trips'
 import type { TransitCheckResult } from '@/lib/assessment/transit'
-import { SectionHeader } from '@/components/ui-kit'
+import { Field, Input, PrimaryButton, SecondaryButton, SectionHeader, Select } from '@/components/ui-kit'
+import { durationDays } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 
 interface PassportOption {
@@ -56,10 +58,6 @@ function isHistoricalDate(dateStr: string) {
   return dateStr < today()
 }
 
-function durationDays(start: string, end: string) {
-  return Math.max(1, Math.round((new Date(end + 'T00:00:00').getTime() - new Date(start + 'T00:00:00').getTime()) / 86400000) + 1)
-}
-
 function formatChipDate(dateStr: string) {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
@@ -79,6 +77,161 @@ function tripTitle(legs: LegDraft[]) {
   return names.length > 0 ? names.join(' + ') : 'New trip'
 }
 
+// ── Transit slot (itinerary step) ───────────────────────────────────────────
+// Module scope, not inside AddTripForm: inline definitions remount on every
+// parent state change, and the country/date inputs lose focus while typing.
+
+function TransitSlot({
+  sortOrder,
+  label,
+  transit,
+  expanded,
+  onToggle,
+  onUpdate,
+  onRemove,
+}: {
+  sortOrder: number
+  label: string
+  transit: TransitDraft | undefined
+  expanded: boolean
+  onToggle: (sortOrder: number) => void
+  onUpdate: (sortOrder: number, patch: { countryCode?: string; transitDate?: string }) => void
+  onRemove: (sortOrder: number) => void
+}) {
+  const isExpanded = expanded || !!transit
+
+  return (
+    <div className="flex flex-col items-center py-1">
+      <div className="w-px h-4 bg-border" />
+      {isExpanded ? (
+        <div className="w-full border border-dashed border-border rounded-xl px-4 py-3 bg-muted/30">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+            <button
+              type="button"
+              onClick={() => onRemove(sortOrder)}
+              className="text-muted-foreground min-h-[44px] min-w-[44px] flex items-center justify-center"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div className="flex flex-col gap-3">
+            <Select
+              value={transit?.countryCode ?? ''}
+              onChange={e => onUpdate(sortOrder, { countryCode: e.target.value })}
+            >
+              <option value="">Transit country</option>
+              {COUNTRIES.map(c => (
+                <option key={c.code} value={c.code}>{countryFlag(c.code)} {c.name}</option>
+              ))}
+            </Select>
+            <Input
+              type="date"
+              value={transit?.transitDate ?? ''}
+              placeholder="Transit date (optional)"
+              onChange={e => onUpdate(sortOrder, { transitDate: e.target.value })}
+            />
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onToggle(sortOrder)}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground py-1 min-h-[44px] px-2"
+        >
+          <Plus size={12} />
+          Add transit stop {label.toLowerCase().includes('home') ? 'before departure' : label.toLowerCase().includes('return') ? 'on return' : 'between destinations'}
+        </button>
+      )}
+      <div className="w-px h-4 bg-border" />
+    </div>
+  )
+}
+
+// ── Transit result card (review step) ───────────────────────────────────────
+
+function TransitResultCard({ transit, className }: { transit: TransitDraft; className?: string }) {
+  const countryName = COUNTRIES.find(c => c.code === transit.countryCode)?.name ?? transit.countryCode
+  const r = transit.checkResult
+
+  // Loading state
+  if (transit.isChecking) {
+    return (
+      <div className={cn('flex items-center gap-3 px-3 py-2 rounded-xl bg-muted/50 border border-dashed border-border', className)}>
+        <span className="text-base shrink-0">{countryFlag(transit.countryCode)}</span>
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          <Loader2 size={10} className="animate-spin" />
+          Checking transit visa requirement…
+        </p>
+      </div>
+    )
+  }
+
+  // Pending / not yet checked
+  if (!r) {
+    return (
+      <div className={cn('flex items-center gap-3 px-3 py-2 rounded-xl bg-muted/50 border border-dashed border-border', className)}>
+        <span className="text-base shrink-0">{countryFlag(transit.countryCode)}</span>
+        <p className="text-xs text-muted-foreground">Transit visa check pending…</p>
+      </div>
+    )
+  }
+
+  // No authorisation required — lightweight informational row
+  if (!r.visa_required) {
+    return (
+      <div className={cn('flex items-center gap-3 px-3 py-2 rounded-xl bg-muted/50 border border-dashed border-border', className)}>
+        <span className="text-base shrink-0">{countryFlag(transit.countryCode)}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold">Transit: {countryName}</p>
+          {transit.transitDate && (
+            <p className="text-xs text-muted-foreground">{formatChipDate(transit.transitDate)}</p>
+          )}
+          <p className="text-xs text-status-compliant font-semibold mt-0.5">No authorisation required.</p>
+        </div>
+        <CheckCircle size={16} className="text-status-compliant shrink-0" />
+      </div>
+    )
+  }
+
+  // Authorisation required — full requirement card matching destination leg cards
+  const days = r.time_required_days ?? 0
+  return (
+    <div className={cn('flex flex-col gap-3', className)}>
+      <div className="rounded-xl border border-border bg-card px-4 py-4">
+        {/* Row 1: country + date */}
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-base shrink-0">{countryFlag(transit.countryCode)}</span>
+          <p className="text-xs font-semibold flex-1">Transit: {countryName}</p>
+          {transit.transitDate && (
+            <span className="text-xs text-muted-foreground">{formatChipDate(transit.transitDate)}</span>
+          )}
+        </div>
+        {/* Row 2: authorisation name */}
+        <p className="font-semibold text-base">{r.authorisation_name ?? 'Authorisation'} required</p>
+        {/* Row 3: reason */}
+        {r.reason && (
+          <p className="text-sm text-muted-foreground mt-1">{r.reason}</p>
+        )}
+      </div>
+      {days > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-border bg-card px-3 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Processing time</p>
+            <p className="font-semibold text-sm">{days} days</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card px-3 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Start by</p>
+            <p className="font-semibold text-sm">
+              {transit.transitDate ? latestStartLabel(transit.transitDate, days) : '—'}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AddTripForm({ passports }: Props) {
   const primaryPassport = passports.find(p => p.is_primary) ?? passports[0] ?? null
 
@@ -88,6 +241,7 @@ export function AddTripForm({ passports }: Props) {
   const [expandedTransits, setExpandedTransits] = useState<Set<number>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isAssessing, setIsAssessing] = useState(false)
   const [isCheckingTransits, setIsCheckingTransits] = useState(false)
   const [isSaving, startSaveTransition] = useTransition()
   const [isStarting, startStartTransition] = useTransition()
@@ -158,13 +312,23 @@ export function AddTripForm({ passports }: Props) {
       if (l.endDate < l.startDate) { setError(`Return date must be after departure date (leg ${i + 1}).`); return }
     }
 
-    // Run leg assessments (sync)
-    setLegs(prev => prev.map(l => ({
-      ...l,
-      assessment: isHistoricalDate(l.startDate)
-        ? { result: 'no_action_required' as const, requirements: [] }
-        : runAssessment(l.countryCode),
-    })))
+    // Run leg assessments via the server action seam. Awaited before the step
+    // flips so the review step never renders an empty assessment as
+    // "no action required". Historical legs stay client-side — no stub needed.
+    setIsAssessing(true)
+    try {
+      const assessments = await Promise.all(legs.map(l =>
+        isHistoricalDate(l.startDate)
+          ? Promise.resolve<AssessmentOutput>({ result: 'no_action_required', requirements: [] })
+          : previewAssessment(l.countryCode)
+      ))
+      setLegs(prev => prev.map((l, i) => ({ ...l, assessment: assessments[i] })))
+    } catch {
+      setError('Could not run the compliance check. Please try again.')
+      return
+    } finally {
+      setIsAssessing(false)
+    }
 
     // Run transit checks (async, via server action) for all populated transits
     const populatedTransits = transits.filter(t => t.countryCode)
@@ -201,7 +365,6 @@ export function AddTripForm({ passports }: Props) {
         end_date: l.endDate,
         purpose: l.purpose,
         passport_id: l.passportId,
-        assessment_result: l.assessment?.result ?? 'no_action_required',
       }
     }))
   }
@@ -223,62 +386,6 @@ export function AddTripForm({ passports }: Props) {
     }))
   }
 
-  // ── Transit slot component (inline) ──────────────────────────────────────
-
-  function TransitSlot({ sortOrder, label }: { sortOrder: number; label: string }) {
-    const transit = getTransit(sortOrder)
-    const isExpanded = expandedTransits.has(sortOrder) || !!transit
-
-    return (
-      <div className="flex flex-col items-center py-1">
-        <div className="w-px h-4 bg-border" />
-        {isExpanded ? (
-          <div className="w-full border border-dashed border-border rounded-xl px-4 py-3 bg-muted/30">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-              <button
-                type="button"
-                onClick={() => removeTransit(sortOrder)}
-                className="text-muted-foreground min-h-[44px] min-w-[44px] flex items-center justify-center"
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <div className="flex flex-col gap-3">
-              <select
-                value={transit?.countryCode ?? ''}
-                onChange={e => updateTransit(sortOrder, { countryCode: e.target.value })}
-                className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
-              >
-                <option value="">Transit country</option>
-                {COUNTRIES.map(c => (
-                  <option key={c.code} value={c.code}>{countryFlag(c.code)} {c.name}</option>
-                ))}
-              </select>
-              <input
-                type="date"
-                value={transit?.transitDate ?? ''}
-                placeholder="Transit date (optional)"
-                onChange={e => updateTransit(sortOrder, { transitDate: e.target.value })}
-                className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => toggleTransit(sortOrder)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground py-1 min-h-[44px] px-2"
-          >
-            <Plus size={12} />
-            Add transit stop {label.toLowerCase().includes('home') ? 'before departure' : label.toLowerCase().includes('return') ? 'on return' : 'between destinations'}
-          </button>
-        )}
-        <div className="w-px h-4 bg-border" />
-      </div>
-    )
-  }
-
   // ── Itinerary step ────────────────────────────────────────────────────────
 
   if (step === 'itinerary') {
@@ -292,7 +399,15 @@ export function AddTripForm({ passports }: Props) {
         </div>
 
         {/* Transit before first leg */}
-        <TransitSlot sortOrder={0} label="Outbound transit" />
+        <TransitSlot
+          sortOrder={0}
+          label="Outbound transit"
+          transit={getTransit(0)}
+          expanded={expandedTransits.has(0)}
+          onToggle={toggleTransit}
+          onUpdate={updateTransit}
+          onRemove={removeTransit}
+        />
 
         {legs.map((leg, idx) => {
           const country = COUNTRIES.find(c => c.code === leg.countryCode)
@@ -316,62 +431,55 @@ export function AddTripForm({ passports }: Props) {
                 </div>
 
                 <div className="flex flex-col gap-4 px-4 py-4">
-                  <select
+                  <Select
                     value={leg.countryCode}
                     onChange={e => updateLeg(leg.id, { countryCode: e.target.value })}
-                    className="w-full h-12 px-4 rounded-xl border border-input bg-background text-base focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
                   >
                     <option value="">Select destination</option>
                     {COUNTRIES.map(c => (
                       <option key={c.code} value={c.code}>{countryFlag(c.code)} {c.name}</option>
                     ))}
-                  </select>
+                  </Select>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Arrival</p>
-                      <input
+                    <Field label="Arrival">
+                      <Input
                         type="date"
                         value={leg.startDate}
                         onChange={e => {
                           const val = e.target.value
                           updateLeg(leg.id, { startDate: val, ...(leg.endDate && val > leg.endDate ? { endDate: val } : {}) })
                         }}
-                        className="w-full h-12 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Departure</p>
-                      <input
+                    </Field>
+                    <Field label="Departure">
+                      <Input
                         type="date"
                         value={leg.endDate}
                         min={leg.startDate || undefined}
                         onChange={e => updateLeg(leg.id, { endDate: e.target.value })}
-                        className="w-full h-12 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       />
-                    </div>
+                    </Field>
                   </div>
 
-                  <select
+                  <Select
                     value={leg.purpose}
                     onChange={e => updateLeg(leg.id, { purpose: e.target.value })}
-                    className="w-full h-12 px-4 rounded-xl border border-input bg-background text-base focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
                   >
                     {PURPOSES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
+                  </Select>
 
                   {passports.length > 0 && (
-                    <select
+                    <Select
                       value={leg.passportId}
                       onChange={e => updateLeg(leg.id, { passportId: e.target.value })}
-                      className="w-full h-12 px-4 rounded-xl border border-input bg-background text-base focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
                     >
                       {passports.map(p => (
                         <option key={p.id} value={p.id}>
                           {p.issuing_country} passport{p.is_primary ? ' (primary)' : ''}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   )}
                 </div>
               </div>
@@ -380,6 +488,11 @@ export function AddTripForm({ passports }: Props) {
               <TransitSlot
                 sortOrder={idx + 1}
                 label={idx === legs.length - 1 ? 'Return transit' : 'Transit between destinations'}
+                transit={getTransit(idx + 1)}
+                expanded={expandedTransits.has(idx + 1)}
+                onToggle={toggleTransit}
+                onUpdate={updateTransit}
+                onRemove={removeTransit}
               />
             </div>
           )
@@ -397,102 +510,13 @@ export function AddTripForm({ passports }: Props) {
 
         {error && <p className="text-sm text-status-at-risk mb-3">{error}</p>}
 
-        <button
-          type="button"
-          onClick={handleContinue}
-          disabled={isCheckingTransits}
-          className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
-        >
-          {isCheckingTransits ? (
-            <><Loader2 size={16} className="animate-spin" /> Checking requirements…</>
+        <PrimaryButton onClick={handleContinue} loading={isAssessing || isCheckingTransits}>
+          {isAssessing || isCheckingTransits ? (
+            'Checking requirements…'
           ) : (
             <>Review requirements <ChevronRight size={16} /></>
           )}
-        </button>
-      </div>
-    )
-  }
-
-  // ── Transit result card (review step) ────────────────────────────────────
-
-  function TransitResultCard({ transit, className }: { transit: TransitDraft; className?: string }) {
-    const countryName = COUNTRIES.find(c => c.code === transit.countryCode)?.name ?? transit.countryCode
-    const r = transit.checkResult
-
-    // Loading state
-    if (transit.isChecking) {
-      return (
-        <div className={cn('flex items-center gap-3 px-3 py-2 rounded-xl bg-muted/50 border border-dashed border-border', className)}>
-          <span className="text-base shrink-0">{countryFlag(transit.countryCode)}</span>
-          <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Loader2 size={10} className="animate-spin" />
-            Checking transit visa requirement…
-          </p>
-        </div>
-      )
-    }
-
-    // Pending / not yet checked
-    if (!r) {
-      return (
-        <div className={cn('flex items-center gap-3 px-3 py-2 rounded-xl bg-muted/50 border border-dashed border-border', className)}>
-          <span className="text-base shrink-0">{countryFlag(transit.countryCode)}</span>
-          <p className="text-xs text-muted-foreground">Transit visa check pending…</p>
-        </div>
-      )
-    }
-
-    // No authorisation required — lightweight informational row
-    if (!r.visa_required) {
-      return (
-        <div className={cn('flex items-center gap-3 px-3 py-2 rounded-xl bg-muted/50 border border-dashed border-border', className)}>
-          <span className="text-base shrink-0">{countryFlag(transit.countryCode)}</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold">Transit: {countryName}</p>
-            {transit.transitDate && (
-              <p className="text-xs text-muted-foreground">{formatChipDate(transit.transitDate)}</p>
-            )}
-            <p className="text-xs text-status-compliant font-semibold mt-0.5">No authorisation required.</p>
-          </div>
-          <CheckCircle size={16} className="text-status-compliant shrink-0" />
-        </div>
-      )
-    }
-
-    // Authorisation required — full requirement card matching destination leg cards
-    const days = r.time_required_days ?? 0
-    return (
-      <div className={cn('flex flex-col gap-3', className)}>
-        <div className="rounded-xl border border-border bg-card px-4 py-4">
-          {/* Row 1: country + date */}
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-base shrink-0">{countryFlag(transit.countryCode)}</span>
-            <p className="text-xs font-semibold flex-1">Transit: {countryName}</p>
-            {transit.transitDate && (
-              <span className="text-xs text-muted-foreground">{formatChipDate(transit.transitDate)}</span>
-            )}
-          </div>
-          {/* Row 2: authorisation name */}
-          <p className="font-semibold text-base">{r.authorisation_name ?? 'Authorisation'} required</p>
-          {/* Row 3: reason */}
-          {r.reason && (
-            <p className="text-sm text-muted-foreground mt-1">{r.reason}</p>
-          )}
-        </div>
-        {days > 0 && (
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-border bg-card px-3 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Processing time</p>
-              <p className="font-semibold text-sm">{days} days</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card px-3 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Start by</p>
-              <p className="font-semibold text-sm">
-                {transit.transitDate ? latestStartLabel(transit.transitDate, days) : '—'}
-              </p>
-            </div>
-          </div>
-        )}
+        </PrimaryButton>
       </div>
     )
   }
@@ -677,9 +701,8 @@ export function AddTripForm({ passports }: Props) {
         {submitError && <p className="text-xs text-status-at-risk mb-2 px-1">{submitError}</p>}
 
         {allHistorical ? (
-          <button
-            type="button"
-            disabled={isSaving}
+          <PrimaryButton
+            loading={isSaving || isCheckingTransits}
             onClick={() => {
               setSubmitError(null)
               const fd = new FormData()
@@ -692,16 +715,17 @@ export function AddTripForm({ passports }: Props) {
                 }
               })
             }}
-            className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSaving && <Loader2 size={16} className="animate-spin" />}
-            {isSaving ? 'Saving…' : 'Save trip'}
-          </button>
+            {isCheckingTransits ? 'Checking transit requirements…' : isSaving ? 'Saving…' : 'Save trip'}
+          </PrimaryButton>
         ) : (
           <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              disabled={isStarting || isSaving}
+            {/* Both CTAs gate on isCheckingTransits: activating mid-check would
+                persist transits with checked_at: null, leaving the trip
+                permanently incomplete (no post-activation recheck exists). */}
+            <PrimaryButton
+              loading={isStarting || isCheckingTransits}
+              disabled={isSaving}
               onClick={() => {
                 setSubmitError(null)
                 const fd = new FormData()
@@ -713,14 +737,11 @@ export function AddTripForm({ passports }: Props) {
                   }
                 })
               }}
-              className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isStarting && <Loader2 size={16} className="animate-spin" />}
-              {isStarting ? 'Setting up…' : 'Get Started'}
-            </button>
-            <button
-              type="button"
-              disabled={isSaving || isStarting}
+              {isCheckingTransits ? 'Checking transit requirements…' : isStarting ? 'Setting up…' : 'Get Started'}
+            </PrimaryButton>
+            <SecondaryButton
+              disabled={isSaving || isStarting || isCheckingTransits}
               onClick={() => {
                 setSubmitError(null)
                 const fd = new FormData()
@@ -733,11 +754,10 @@ export function AddTripForm({ passports }: Props) {
                   }
                 })
               }}
-              className="w-full h-12 rounded-xl border border-border text-foreground font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSaving && <Loader2 size={16} className="animate-spin" />}
               {isSaving ? 'Saving…' : 'Save Trip'}
-            </button>
+            </SecondaryButton>
           </div>
         )}
       </div>

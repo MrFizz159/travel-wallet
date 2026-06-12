@@ -1,9 +1,7 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createPassport } from '@/app/actions/profile'
-
-const inputClass = 'w-full h-12 px-4 rounded-xl border border-input bg-background text-base focus:outline-none focus:ring-2 focus:ring-ring'
-const labelClass = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground'
+import { Field, Input, PrimaryButton } from '@/components/ui-kit'
 
 export default function AddPassportPage() {
   return (
@@ -16,52 +14,47 @@ export default function AddPassportPage() {
       </div>
 
       <form action={createPassport} className="flex flex-col gap-6">
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Issuing country</label>
-          <input
+        <Field label="Issuing country">
+          <Input
             type="text"
             name="issuing_country"
             required
             placeholder="e.g. United Kingdom"
-            className={inputClass}
           />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Nationality</label>
-          <input
+        <Field label="Nationality">
+          <Input
             type="text"
             name="nationality"
             required
             placeholder="e.g. British"
-            className={inputClass}
           />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Passport number</label>
-          <input
+        <Field label="Passport number">
+          <Input
             type="text"
             name="passport_number"
             required
             placeholder="e.g. 123456789"
-            className={inputClass}
           />
-        </div>
+        </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-2">
-            <label className={labelClass}>Issue date</label>
-            <input type="date" name="issue_date" required className="h-12 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className={labelClass}>Expiry date</label>
-            <input type="date" name="expiry_date" required className="h-12 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-          </div>
+          <Field label="Issue date">
+            <Input type="date" name="issue_date" required />
+          </Field>
+          <Field label="Expiry date">
+            <Input type="date" name="expiry_date" required />
+          </Field>
         </div>
 
+        {/* File input stays hand-rolled: Field's label prop is string-only and the
+            "(optional)" suffix needs normal-case styling; the dashed picker label
+            is a custom pattern the Input primitive doesn't cover. */}
         <div className="flex flex-col gap-2">
-          <label className={labelClass}>
+          <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Passport scan <span className="normal-case font-normal text-muted-foreground">(optional)</span>
           </label>
           <label className="flex items-center gap-3 h-12 px-4 rounded-xl border border-dashed border-input bg-background cursor-pointer text-sm text-muted-foreground">
@@ -70,12 +63,7 @@ export default function AddPassportPage() {
           </label>
         </div>
 
-        <button
-          type="submit"
-          className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm"
-        >
-          Save passport
-        </button>
+        <PrimaryButton type="submit">Save passport</PrimaryButton>
       </form>
     </div>
   )

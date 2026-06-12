@@ -2,12 +2,10 @@
 
 import { useTransition, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { COUNTRIES, countryFlag } from '@/lib/countries'
 import { createTravelHistoryEntry } from '@/app/actions/history'
-
-const inputClass = 'w-full h-12 px-4 rounded-xl border border-input bg-background text-base focus:outline-none focus:ring-2 focus:ring-ring'
-const labelClass = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground'
+import { Field, Input, Select, PrimaryButton } from '@/components/ui-kit'
 
 export default function LogTravelPage() {
   const [isPending, startTransition] = useTransition()
@@ -38,74 +36,52 @@ export default function LogTravelPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Travelling from</label>
-          <select name="origin_country_code" required className={inputClass}>
+        <Field label="Travelling from">
+          <Select name="origin_country_code" required>
             <option value="">Select country</option>
             {COUNTRIES.map(c => (
               <option key={c.code} value={c.code}>
                 {countryFlag(c.code)} {c.name}
               </option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
 
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Destination</label>
-          <select name="destination_country_code" required className={inputClass}>
+        <Field label="Destination">
+          <Select name="destination_country_code" required>
             <option value="">Select country</option>
             {COUNTRIES.map(c => (
               <option key={c.code} value={c.code}>
                 {countryFlag(c.code)} {c.name}
               </option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-2">
-            <label className={labelClass}>Arrival</label>
-            <input
-              type="date"
-              name="start_date"
-              required
-              max={today}
-              className="h-12 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className={labelClass}>Departure</label>
-            <input
-              type="date"
-              name="end_date"
-              required
-              max={today}
-              className="h-12 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
+          <Field label="Arrival">
+            <Input type="date" name="start_date" required max={today} />
+          </Field>
+          <Field label="Departure">
+            <Input type="date" name="end_date" required max={today} />
+          </Field>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Purpose</label>
-          <select name="purpose" required className={inputClass}>
+        <Field label="Purpose">
+          <Select name="purpose" required>
             <option value="business">Business</option>
             <option value="tourism">Tourism</option>
             <option value="education">Education</option>
             <option value="relocation">Relocation</option>
             <option value="other">Other</option>
-          </select>
-        </div>
+          </Select>
+        </Field>
 
         {error && <p className="text-xs text-status-at-risk">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={isPending}
-          className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isPending && <Loader2 size={16} className="animate-spin" />}
+        <PrimaryButton type="submit" loading={isPending}>
           {isPending ? 'Saving…' : 'Save trip'}
-        </button>
+        </PrimaryButton>
       </form>
     </div>
   )

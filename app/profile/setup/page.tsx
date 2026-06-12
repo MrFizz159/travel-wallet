@@ -21,9 +21,9 @@ export default async function ProfileSetupPage() {
       </div>
 
       <ProfileSetupForm
-        fullName={(profile as any)?.full_name ?? ''}
-        nationality={(profile as any)?.nationality ?? ''}
-        countryOfResidence={(profile as any)?.country_of_residence ?? ''}
+        fullName={profile?.full_name ?? ''}
+        nationality={profile?.nationality ?? ''}
+        countryOfResidence={profile?.country_of_residence ?? ''}
       />
 
       <Link

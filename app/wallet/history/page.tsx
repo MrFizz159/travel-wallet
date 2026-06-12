@@ -1,13 +1,9 @@
 import Link from 'next/link'
 import { ArrowLeft, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { subtractDays } from '@/lib/compliance'
+import { subtractDays, durationDays } from '@/lib/dates'
 import { countryFlag } from '@/lib/countries'
 import { SectionHeader } from '@/components/ui-kit'
-
-function durationDays(start: string, end: string) {
-  return Math.max(1, Math.round((new Date(end + 'T00:00:00').getTime() - new Date(start + 'T00:00:00').getTime()) / 86400000) + 1)
-}
 
 function formatDateRange(start: string, end: string) {
   const s = new Date(start + 'T00:00:00')

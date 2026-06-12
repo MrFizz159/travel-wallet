@@ -11,15 +11,23 @@
  */
 
 import React, { type ReactNode, type ButtonHTMLAttributes } from 'react'
+import Link from 'next/link'
 import { ChevronRight, ChevronDown, CheckCircle, AlertTriangle, Clock, Loader2, Upload, Briefcase } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { countryFlagUrl } from '@/lib/countries'
+import { StatusBadge } from './status'
+import { FOCUS_RING } from './form'
+
+// Primitives live in their own modules; everything stays importable from '@/components/ui-kit'
+export * from './status'
+export * from './form'
+export * from './bottom-sheet'
+export * from './progress-bar'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type StatusValue = 'compliant' | 'incomplete' | 'at_risk' | 'verified'
 export type RequirementStatusValue = 'not_started' | 'in_progress' | 'at_risk' | 'complete'
 export type SubTaskType = 'automated' | 'generatable' | 'primary_action' | 'third_party' | 'informational'
 export type SubTaskStatus = 'pending' | 'complete' | 'case_in_progress' | 'submitted'
@@ -73,38 +81,6 @@ export function Card({ children, className, onClick }: CardProps) {
 
 export function Divider({ className }: { className?: string }) {
   return <div className={cn('border-t border-border w-full', className)} />
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STATUS BADGE
-// Compliance status pill — compliant / incomplete / at_risk / verified
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface StatusBadgeProps {
-  status: StatusValue
-  className?: string
-}
-
-const STATUS_BADGE_VARIANTS: Record<StatusValue, { label: string; cls: string }> = {
-  compliant:  { label: 'Ready',       cls: 'bg-status-compliant-bg text-status-compliant'   },
-  incomplete: { label: 'Incomplete',  cls: 'bg-status-incomplete-bg text-status-incomplete' },
-  at_risk:    { label: 'At Risk',     cls: 'bg-status-at-risk-bg text-status-at-risk'       },
-  verified:   { label: 'Verified',    cls: 'bg-status-verified-bg text-status-verified'     },
-}
-
-export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const v = STATUS_BADGE_VARIANTS[status]
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold leading-none',
-        v.cls,
-        className
-      )}
-    >
-      {v.label}
-    </span>
-  )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -562,6 +538,8 @@ interface SubTaskRowProps {
   onGetStarted?: () => void
   onUpload?: (file: File) => void
   onViewCase?: () => void
+  /** When set and the task is complete, "Done" becomes a tappable link to the evidence document */
+  viewHref?: string
   isPending?: boolean
   className?: string
 }
@@ -575,6 +553,7 @@ export function SubTaskRow({
   onGetStarted,
   onUpload,
   onViewCase,
+  viewHref,
   isPending = false,
   className,
 }: SubTaskRowProps) {
@@ -612,7 +591,19 @@ export function SubTaskRow({
       )}
 
       {isComplete && type !== 'automated' && (
-        <span className="text-xs font-semibold text-status-compliant shrink-0">Done</span>
+        viewHref ? (
+          <Link
+            href={viewHref}
+            className={cn(
+              'flex items-center text-xs font-semibold text-status-compliant shrink-0 min-h-[44px] px-2 -mr-2 rounded-lg',
+              FOCUS_RING
+            )}
+          >
+            View ›
+          </Link>
+        ) : (
+          <span className="text-xs font-semibold text-status-compliant shrink-0">Done</span>
+        )
       )}
 
       {!isComplete && type === 'automated' && (

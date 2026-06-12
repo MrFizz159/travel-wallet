@@ -5,13 +5,12 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { CheckCircle, AlertTriangle, ArrowLeft, MoreVertical, ChevronDown } from 'lucide-react'
 import { countryFlag } from '@/lib/countries'
-import { runAssessment } from '@/lib/assessment/stub'
 import { activateTrip } from '@/app/actions/trips'
-import { StatusBadge } from '@/components/status-badge'
 import { RequirementDrawer } from '@/components/requirement-drawer'
 import { TravelEssentialsSection } from '@/components/travel-essentials-section'
 import { HistoricalDocSection } from '@/components/historical-doc-section'
 import { effectiveStatus } from '@/lib/compliance'
+import { durationDays, formatDate, subtractDays } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import {
   Card,
@@ -20,24 +19,21 @@ import {
   RequirementRow as RequirementRowCard,
   SubTaskRow,
   PrimaryButton,
+  statusClasses,
+  FOCUS_RING,
 } from '@/components/ui-kit'
-import type { RequirementStatusValue } from '@/components/ui-kit'
+import type { RequirementStatusValue, StatusValue } from '@/components/ui-kit'
 import type { TripDetail, LegDetail, RequirementRow, TransitWithRequirement } from '@/lib/db-types'
 import type { SubTask } from '@/lib/types'
+import type { AssessmentOutput } from '@/lib/assessment/stub'
 
 interface Props {
   trip: TripDetail
+  /** Exploratory trips only: server-computed assessment preview per leg id */
+  legPreviews?: Record<string, AssessmentOutput>
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-}
-
-function durationDays(start: string, end: string) {
-  return Math.max(1, Math.round((new Date(end + 'T00:00:00').getTime() - new Date(start + 'T00:00:00').getTime()) / 86400000) + 1)
-}
 
 function tripTitle(legs: { destination_country: string }[]) {
   return legs.map(l => l.destination_country).join(' + ')
@@ -45,17 +41,18 @@ function tripTitle(legs: { destination_country: string }[]) {
 
 // ── Compliance chip (hero overlay) ───────────────────────────────────────────
 
+const CHIP_ICONS: Record<string, ReactNode> = {
+  compliant: <CheckCircle size={14} />,
+  incomplete: <AlertTriangle size={14} />,
+  at_risk: <AlertTriangle size={14} />,
+}
+
 function ComplianceChip({ status }: { status: string | null }) {
-  if (!status) return null
-  const variants: Record<string, { label: string; cls: string; icon: ReactNode }> = {
-    compliant:  { label: 'Ready',      cls: 'bg-status-compliant-bg text-status-compliant',   icon: <CheckCircle size={14} /> },
-    incomplete: { label: 'Incomplete', cls: 'bg-status-incomplete-bg text-status-incomplete', icon: <AlertTriangle size={14} /> },
-    at_risk:    { label: 'At Risk',    cls: 'bg-status-at-risk-bg text-status-at-risk',       icon: <AlertTriangle size={14} /> },
-  }
-  const v = variants[status] ?? { label: status, cls: 'bg-card/90 text-muted-foreground', icon: null }
+  if (!status || !(status in CHIP_ICONS)) return null
+  const v = statusClasses(status as StatusValue)
   return (
-    <span className={cn('inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold leading-none shadow-sm', v.cls)}>
-      {v.icon}
+    <span className={cn('inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold leading-none shadow-sm', v.bg, v.text)}>
+      {CHIP_ICONS[status]}
       {v.label}
     </span>
   )
@@ -105,23 +102,42 @@ function CollapsibleRequirementCard({
 }) {
   const [isOpen, setIsOpen] = useState(true)
   const status = effectiveStatus(req) as RequirementStatusValue
+  const isComplete = status === 'complete'
   const sortedSubTasks = [...req.sub_tasks].sort((a, b) => a.sort_order - b.sort_order)
   const completedCount = sortedSubTasks.filter(t => t.status === 'complete').length
   const totalCount = sortedSubTasks.length
   const hasSubTasks = sortedSubTasks.length > 0
 
+  // Complete requirements open the drawer on row tap (border access to the
+  // evidence document — PRD Flow E); the chevron stays the collapse control.
+  // Incomplete requirements keep collapse-on-tap when sub-tasks exist.
+  const rowTapTogglesCollapse = hasSubTasks && !isComplete
+
   return (
     <Card>
-      <RequirementRowCard
-        name={req.name}
-        status={status}
-        latestStartDate={req.latest_start_date ?? undefined}
-        timeRequiredDays={req.time_required_days}
-        completedCount={completedCount}
-        totalCount={totalCount}
-        isExpanded={hasSubTasks ? isOpen : undefined}
-        onClick={hasSubTasks ? () => setIsOpen(prev => !prev) : () => onOpenReq(req, legStartDate)}
-      />
+      <div className="relative">
+        <RequirementRowCard
+          name={req.name}
+          status={status}
+          latestStartDate={req.latest_start_date ?? undefined}
+          timeRequiredDays={req.time_required_days}
+          completedCount={completedCount}
+          totalCount={totalCount}
+          isExpanded={hasSubTasks ? isOpen : undefined}
+          onClick={rowTapTogglesCollapse ? () => setIsOpen(prev => !prev) : () => onOpenReq(req, legStartDate)}
+        />
+        {isComplete && hasSubTasks && (
+          <button
+            type="button"
+            aria-label={isOpen ? 'Collapse steps' : 'Expand steps'}
+            onClick={e => {
+              e.stopPropagation()
+              setIsOpen(prev => !prev)
+            }}
+            className={cn('absolute inset-y-0 right-0 w-12 min-h-[44px] rounded-lg', FOCUS_RING)}
+          />
+        )}
+      </div>
       {hasSubTasks && isOpen && (
         <>
           <Divider />
@@ -225,6 +241,7 @@ function SubTaskRowConnected({
       onGenerate={onOpenDrawer}
       onGetStarted={onOpenDrawer}
       onViewCase={task.case_id ? () => router.push(`/trips/${tripId}/cases/${task.case_id}`) : undefined}
+      viewHref={task.evidence_document_id ? `/trips/${tripId}/documents/${task.evidence_document_id}` : undefined}
       isPending={isPending}
     />
   )
@@ -309,7 +326,7 @@ function LegSection({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function TripDetailView({ trip }: Props) {
+export function TripDetailView({ trip, legPreviews }: Props) {
   const [openReq, setOpenReq] = useState<RequirementRow | null>(null)
   const [openReqLegStart, setOpenReqLegStart] = useState<string | undefined>(undefined)
 
@@ -424,9 +441,9 @@ export function TripDetailView({ trip }: Props) {
       <div>
         {heroSection}
 
-        {legs.map((leg, idx) => {
-          const assessment = runAssessment(leg.destination_country_code)
-          const hasRequirements = assessment.requirements.length > 0
+        {legs.map(leg => {
+          const preview = legPreviews?.[leg.id] ?? { result: 'review_required' as const, requirements: [] }
+          const hasRequirements = preview.result === 'action_required' && preview.requirements.length > 0
           return (
             <div key={leg.id} className="mb-6">
               {/* Leg label */}
@@ -441,7 +458,7 @@ export function TripDetailView({ trip }: Props) {
               {hasRequirements && (
                 <div className="flex flex-col gap-4">
                   <SectionHeader label="Requirements" />
-                  {assessment.requirements.map((req, i) => (
+                  {preview.requirements.map((req, i) => (
                     <Card key={i}>
                       <div className="px-4 pt-4 pb-3">
                         <p className="font-semibold">{req.name}</p>
@@ -449,11 +466,7 @@ export function TripDetailView({ trip }: Props) {
                         {req.time_required_days > 0 && (
                           <p className="text-xs text-muted-foreground mt-2">
                             Allow {req.time_required_days} days · start by{' '}
-                            {(() => {
-                              const d = new Date(leg.start_date + 'T00:00:00')
-                              d.setDate(d.getDate() - req.time_required_days)
-                              return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-                            })()}
+                            {formatDate(subtractDays(leg.start_date, req.time_required_days))}
                           </p>
                         )}
                       </div>
@@ -475,11 +488,17 @@ export function TripDetailView({ trip }: Props) {
                 </div>
               )}
 
-              {!hasRequirements && (
+              {preview.result === 'no_action_required' && (
                 <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-status-compliant-bg mb-2">
                   <CheckCircle size={16} className="text-status-compliant shrink-0" />
                   <p className="text-sm text-status-compliant">No visa or authorisation required for this destination.</p>
                 </div>
+              )}
+
+              {preview.result === 'review_required' && (
+                <p className="text-sm text-muted-foreground px-1 mb-2">
+                  Assessment unavailable for this destination.
+                </p>
               )}
             </div>
           )

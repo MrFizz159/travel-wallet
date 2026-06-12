@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Briefcase, CheckCircle2, Circle, MessageSquare, Sparkles, Bell, ChevronRight } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Circle, MessageSquare, Sparkles, Bell, ChevronRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Avatar, ProgressBar, statusClasses } from '@/components/ui-kit'
 import type { TravelCase } from '@/lib/types'
 
 const MILESTONES = [
@@ -19,8 +21,9 @@ const MILESTONES = [
 const STUB_MANAGER = {
   name: 'Sarah Johnson',
   role: 'Case Manager',
-  initials: 'SJ',
 }
+
+const ON_TRACK = statusClasses('compliant')
 
 interface Props {
   travelCase: TravelCase
@@ -72,7 +75,7 @@ export function CaseDetailView({ travelCase, tripId, backLabel }: Props) {
               <p className="text-xs text-muted-foreground mb-0.5">Current status</p>
               <p className="text-sm font-semibold">{travelCase.status}</p>
             </div>
-            <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
+            <span className={cn('inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold leading-none', ON_TRACK.bg, ON_TRACK.text)}>
               On Track
             </span>
           </div>
@@ -81,12 +84,7 @@ export function CaseDetailView({ travelCase, tripId, backLabel }: Props) {
               <span>Overall progress</span>
               <span>{travelCase.progress}%</span>
             </div>
-            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full rounded-full bg-foreground transition-all"
-                style={{ width: `${travelCase.progress}%` }}
-              />
-            </div>
+            <ProgressBar value={travelCase.progress} />
           </div>
         </div>
 
@@ -104,20 +102,31 @@ export function CaseDetailView({ travelCase, tripId, backLabel }: Props) {
                 <div key={milestone} className="flex gap-3">
                   {/* Stepper column */}
                   <div className="flex flex-col items-center">
-                    <div className={`
-                      w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5
-                      ${isComplete ? 'bg-foreground' : isCurrent ? 'border-2 border-foreground bg-background' : 'border border-border bg-background'}
-                    `}>
+                    <div
+                      className={cn(
+                        'w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5',
+                        isComplete && 'bg-foreground',
+                        isCurrent && 'border-2 border-foreground bg-background',
+                        isUpcoming && 'border border-border bg-background'
+                      )}
+                    >
                       {isComplete && <CheckCircle2 size={14} className="text-background" />}
                       {isCurrent && <div className="w-2 h-2 rounded-full bg-foreground" />}
                       {isUpcoming && <Circle size={10} className="text-border" />}
                     </div>
                     {!isLast && (
-                      <div className={`w-px flex-1 my-1 ${isComplete ? 'bg-foreground' : 'bg-border'}`} style={{ minHeight: '20px' }} />
+                      <div className={cn('w-px flex-1 my-1 min-h-5', isComplete ? 'bg-foreground' : 'bg-border')} />
                     )}
                   </div>
                   {/* Label */}
-                  <p className={`text-sm pb-5 ${isComplete ? 'text-foreground' : isCurrent ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                  <p
+                    className={cn(
+                      'text-sm pb-5',
+                      isComplete && 'text-foreground',
+                      isCurrent && 'text-foreground font-medium',
+                      isUpcoming && 'text-muted-foreground'
+                    )}
+                  >
                     {milestone}
                   </p>
                 </div>
@@ -150,9 +159,7 @@ export function CaseDetailView({ travelCase, tripId, backLabel }: Props) {
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-xs font-medium text-muted-foreground mb-3">Team assigned</p>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-              <span className="text-xs font-semibold text-muted-foreground">{STUB_MANAGER.initials}</span>
-            </div>
+            <Avatar name={STUB_MANAGER.name} size="md" />
             <div>
               <p className="text-sm font-medium">{STUB_MANAGER.name}</p>
               <p className="text-xs text-muted-foreground">{STUB_MANAGER.role}</p>
@@ -171,9 +178,9 @@ export function CaseDetailView({ travelCase, tripId, backLabel }: Props) {
               role="switch"
               aria-checked={notificationsEnabled}
               onClick={() => setNotificationsEnabled(v => !v)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${notificationsEnabled ? 'bg-foreground' : 'bg-muted'}`}
+              className={cn('relative inline-flex h-6 w-11 items-center rounded-full transition-colors', notificationsEnabled ? 'bg-foreground' : 'bg-muted')}
             >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${notificationsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+              <span className={cn('inline-block h-4 w-4 transform rounded-full bg-background transition-transform', notificationsEnabled ? 'translate-x-6' : 'translate-x-1')} />
             </button>
           </div>
         </div>

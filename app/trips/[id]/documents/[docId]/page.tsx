@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Download, ExternalLink, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { Card } from '@/components/ui-kit'
+import PrintLetterButton from '@/components/print-letter-button'
 
 export default async function DocumentViewerPage({
   params,
@@ -28,6 +30,18 @@ export default async function DocumentViewerPage({
   const signedUrl = urlData?.signedUrl ?? null
   const isImage = doc.mime_type?.startsWith('image/')
   const isPdf = doc.mime_type === 'application/pdf'
+  const isText = doc.mime_type?.startsWith('text/')
+
+  // Fetch text content server-side so it renders as a letter
+  let letterText: string | null = null
+  if (signedUrl && isText) {
+    try {
+      const res = await fetch(signedUrl)
+      if (res.ok) letterText = await res.text()
+    } catch {
+      letterText = null
+    }
+  }
   const uploadDate = new Date(doc.upload_date).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
@@ -93,24 +107,43 @@ export default async function DocumentViewerPage({
         </div>
       )}
 
+      {/* Text document: render as a styled letter */}
+      {letterText !== null && (
+        <div className="mb-4">
+          {doc.type === 'letter_draft' && (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-muted text-xs font-medium text-muted-foreground mb-3">
+              AI-generated draft
+            </span>
+          )}
+          <Card className="px-6 py-8">
+            <div className="font-serif text-sm leading-relaxed whitespace-pre-wrap">
+              {letterText}
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Unknown type */}
-      {!isImage && !isPdf && (
+      {!isImage && !isPdf && letterText === null && (
         <div className="rounded-xl border border-border bg-muted/50 px-6 py-10 flex flex-col items-center gap-3 mb-4">
           <FileText size={40} className="text-muted-foreground" />
           <p className="text-sm text-muted-foreground">Preview not available</p>
         </div>
       )}
 
-      {/* Download */}
+      {/* Download (+ print for text documents) */}
       {signedUrl && (
-        <a
-          href={signedUrl}
-          download={doc.name}
-          className="flex items-center justify-center gap-2 w-full h-12 rounded-xl border border-border text-sm font-semibold"
-        >
-          <Download size={16} />
-          Download
-        </a>
+        <div className="flex gap-3">
+          <a
+            href={signedUrl}
+            download={doc.name}
+            className="flex flex-1 items-center justify-center gap-2 h-12 rounded-xl border border-border text-sm font-semibold"
+          >
+            <Download size={16} />
+            Download
+          </a>
+          {letterText !== null && <PrintLetterButton className="flex-1" />}
+        </div>
       )}
     </div>
   )

@@ -53,4 +53,18 @@ public/       # Static assets
 
 **Class merging:** always use `cn()` from `lib/utils.ts` when combining Tailwind classes conditionally.
 
-**Theming:** CSS variables for colours and radius are defined in `app/globals.css` under `@layer base`. Dark mode is supported via the `.dark` class variant.
+**Theming:** CSS variables for colours and radius are defined in `app/globals.css` under `@layer base`. Light mode only — see Design system rules below.
+
+## Design system rules
+
+- Token-only colour: no raw Tailwind palette colours (red-500, green-50) or hex literals in components. Add a named token to `globals.css` first.
+- One status module: status→colour/label mapping lives only in `components/ui-kit/status.tsx` (StatusBadge + statusClasses). Never redefine it.
+- Component placement: `components/ui/` = shadcn-generated primitives only; `components/ui-kit/` = hand-rolled primitives and domain composites. Never hand-roll what shadcn ships; never put domain components in `ui/`.
+- One BottomSheet: every overlay composes the `ui-kit` BottomSheet, which owns z-index (the `--z-*` scale in `globals.css`), scroll lock, and Escape.
+- Forms use Field/Input/Select from `ui-kit`. Never write the input class string inline. One height (h-12).
+- `cn()` always; `text-[Npx]`, `z-[N]`, `bg-[#...]` and inline style colours are review flags meaning "add a token or use the scale".
+- Interactive elements get the shared FOCUS_RING const and a ≥44px hit area.
+- Components over ~400 lines get a folder, one concern per file. Never define a component inside another component's body.
+- No dark mode: removed deliberately (2026-06). Don't add `dark:` classes or a `.dark` block without re-deriving the full token set from brand values.
+
+Full rationale: `reviews/02-design-system.md`.

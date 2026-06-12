@@ -66,14 +66,13 @@ export default async function TripsPage(props: { searchParams: Promise<{ tab?: s
     .eq('state', 'active')
 
   const expiredTripIds = (activeTripsForCompletion ?? [])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .filter((t: any) => {
-      const legs = (t.trip_legs ?? []) as { end_date: string; sort_order: number }[]
+    .filter((t: { id: string; trip_legs: { end_date: string; sort_order: number }[] | null }) => {
+      const legs = t.trip_legs ?? []
       if (legs.length === 0) return false
       const lastEnd = [...legs].sort((a, b) => b.sort_order - a.sort_order)[0].end_date
       return lastEnd < today
     })
-    .map((t: any) => t.id)
+    .map(t => t.id)
 
   if (expiredTripIds.length > 0) {
     await supabase

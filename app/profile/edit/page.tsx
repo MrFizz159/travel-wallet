@@ -20,9 +20,9 @@ export default async function EditProfilePage() {
       <p className="text-sm text-muted-foreground -mt-4 mb-6">Used to personalise your compliance assessments.</p>
 
       <EditProfileForm
-        fullName={(profile as any)?.full_name ?? ''}
-        nationality={(profile as any)?.nationality ?? ''}
-        countryOfResidence={(profile as any)?.country_of_residence ?? ''}
+        fullName={profile?.full_name ?? ''}
+        nationality={profile?.nationality ?? ''}
+        countryOfResidence={profile?.country_of_residence ?? ''}
       />
     </div>
   )

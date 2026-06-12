@@ -5,9 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { COUNTRIES, countryFlag } from '@/lib/countries'
 import { createAuthorization } from '@/app/actions/wallet'
 import type { Passport } from '@/lib/types'
-
-const inputClass = 'w-full h-12 px-4 rounded-xl border border-input bg-background text-base focus:outline-none focus:ring-2 focus:ring-ring'
-const labelClass = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground'
+import { Field, Input, Select, PrimaryButton } from '@/components/ui-kit'
 
 export default async function AddAuthorizationPage() {
   const supabase = await createClient()
@@ -32,72 +30,54 @@ export default async function AddAuthorizationPage() {
       </div>
 
       <form action={createAuthorization} className="flex flex-col gap-6">
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Name</label>
-          <input
+        <Field label="Name">
+          <Input
             type="text"
             name="name"
             required
             placeholder="e.g. UK Skilled Worker Visa"
-            className={inputClass}
           />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Country</label>
-          <select name="country_code" required className={inputClass}>
+        <Field label="Country">
+          <Select name="country_code" required>
             <option value="">Select country</option>
             {COUNTRIES.map(c => (
               <option key={c.code} value={c.code}>
                 {countryFlag(c.code)} {c.name}
               </option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-2">
-            <label className={labelClass}>Issue date</label>
-            <input
-              type="date"
-              name="issue_date"
-              required
-              className="h-12 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className={labelClass}>Expiry date</label>
-            <input
-              type="date"
-              name="expiry_date"
-              required
-              className="h-12 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
+          <Field label="Issue date">
+            <Input type="date" name="issue_date" required />
+          </Field>
+          <Field label="Expiry date">
+            <Input type="date" name="expiry_date" required />
+          </Field>
         </div>
 
         {passportList.length > 0 && (
           <div className="flex flex-col gap-2">
-            <label className={labelClass}>
+            {/* Hand-rolled label: Field's label prop is string-only and the
+                "(optional)" suffix needs normal-case styling */}
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Connected passport <span className="normal-case font-normal text-muted-foreground">(optional)</span>
             </label>
-            <select name="passport_id" className={inputClass}>
+            <Select name="passport_id">
               <option value="">None</option>
               {passportList.map(p => (
                 <option key={p.id} value={p.id}>
                   {p.issuing_country} ••• {p.passport_number.slice(-4)}{p.is_primary ? ' (Primary)' : ''}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
 
-        <button
-          type="submit"
-          className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm"
-        >
-          Save authorization
-        </button>
+        <PrimaryButton type="submit">Save authorization</PrimaryButton>
       </form>
     </div>
   )

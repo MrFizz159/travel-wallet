@@ -1,5 +1,7 @@
 import { cn } from '@/lib/utils'
 import { COUNTRIES, countryFlag } from '@/lib/countries'
+// Imported directly (not via the ui-kit index) so this stays a server component
+import { statusClasses, type StatusValue } from '@/components/ui-kit/status'
 import type { Passport } from '@/lib/types'
 
 function countryToFlag(countryName: string): string {
@@ -25,17 +27,19 @@ export default function PassportCard({ passport, className }: PassportCardProps)
   const flag = countryToFlag(passport.issuing_country)
 
   let pillLabel: string | null = null
-  let pillClass = ''
+  let pillStatus: StatusValue | null = null
   if (monthsUntilExpiry <= 0) {
     pillLabel = 'Expired'
-    pillClass = 'bg-red-500/20 text-red-300'
+    pillStatus = 'at_risk'
   } else if (monthsUntilExpiry <= 6) {
     pillLabel = 'Expiring'
-    pillClass = 'bg-red-500/20 text-red-300'
+    pillStatus = 'at_risk'
   } else if (monthsUntilExpiry <= 12) {
     pillLabel = 'Expiring soon'
-    pillClass = 'bg-amber-500/20 text-amber-300'
+    pillStatus = 'incomplete'
   }
+  // onDark variant — high-contrast status colours for the navy gradient
+  const pill = pillStatus ? statusClasses(pillStatus, { onDark: true }) : null
 
   return (
     <div
@@ -58,8 +62,8 @@ export default function PassportCard({ passport, className }: PassportCardProps)
       <div className="flex items-end justify-between">
         <span className="text-xs text-white/50 font-mono">••• {last4}</span>
         <div className="flex flex-col items-end gap-0.5">
-          {pillLabel && (
-            <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full', pillClass)}>
+          {pillLabel && pill && (
+            <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full', pill.bg, pill.text)}>
               {pillLabel}
             </span>
           )}

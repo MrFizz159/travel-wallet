@@ -5,10 +5,13 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { runAssessment } from '@/lib/assessment/stub'
 import { runTransitCheck, getTransitSubTasks, getTransitGuidance } from '@/lib/assessment/transit'
-import { subtractDays, addDays, computeLegComplianceStatus } from '@/lib/compliance'
+import { computeLegComplianceStatus } from '@/lib/compliance'
+import { subtractDays, addDays, durationDays } from '@/lib/dates'
 import { syncComplianceStatus } from './_utils'
 
-// Payload shapes expected from the itinerary form (JSON-encoded in FormData)
+// Payload shapes expected from the itinerary form (JSON-encoded in FormData).
+// Note: assessment_result is intentionally absent — it's derived server-side
+// at insert time, never trusted from the client.
 type LegPayload = {
   destination_country: string
   destination_country_code: string
@@ -16,7 +19,6 @@ type LegPayload = {
   end_date: string
   purpose: string
   passport_id: string
-  assessment_result: string
 }
 
 type TransitPayload = {
@@ -31,30 +33,38 @@ type TransitPayload = {
   time_required_days: number
 }
 
-function daysBetween(start: string, end: string): number {
-  const s = new Date(start + 'T00:00:00')
-  const e = new Date(end + 'T00:00:00')
-  return Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1)
+// Fetch expiry dates for a set of passport ids in one query.
+// Legs can reference different passports, so callers pass every distinct id.
+async function fetchPassportExpiries(
+  supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>,
+  passportIds: Array<string | null | undefined>,
+): Promise<Map<string, string | null>> {
+  const ids = [...new Set(passportIds.filter((id): id is string => Boolean(id)))]
+  const expiries = new Map<string, string | null>()
+  if (ids.length === 0) return expiries
+
+  const { data } = await supabase
+    .from('passports')
+    .select('id, expiry_date')
+    .in('id', ids)
+
+  for (const row of data ?? []) expiries.set(row.id, row.expiry_date)
+  return expiries
 }
 
-// Insert requirements + sub_tasks for a single leg. Sequential — never batch
-// across legs to avoid name-collision in the find-by-name sub_task match.
+// Insert requirements + sub_tasks for a single leg. Sub-tasks correlate with
+// their parent requirement by array index (PostgREST returns inserted rows in
+// input order), so legs can be processed in parallel safely.
 async function insertLegRequirements(
   supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>,
   tripId: string,
   legId: string,
+  destinationCountryCode: string,
   legStartDate: string,
   legEndDate: string,
-  passportId: string | null,
+  passportExpiry: string | null,
 ) {
-  const leg = await supabase
-    .from('trip_legs')
-    .select('destination_country_code')
-    .eq('id', legId)
-    .single()
-  if (!leg.data) return []
-
-  const assessment = runAssessment(leg.data.destination_country_code)
+  const assessment = runAssessment(destinationCountryCode)
   if (assessment.requirements.length === 0) return []
 
   const { data: insertedReqs } = await supabase
@@ -78,26 +88,20 @@ async function insertLegRequirements(
     .select()
 
   if (!insertedReqs || insertedReqs.length === 0) return []
-
-  let passport: { expiry_date: string } | null = null
-  if (passportId) {
-    const { data } = await supabase
-      .from('passports')
-      .select('expiry_date')
-      .eq('id', passportId)
-      .single()
-    passport = data
+  if (insertedReqs.length !== assessment.requirements.length) {
+    throw new Error(
+      `Requirement insert mismatch for leg ${legId}: expected ${assessment.requirements.length} rows, got ${insertedReqs.length}`
+    )
   }
 
   const minExpiry = addDays(legEndDate, 180)
-  const subTaskPayloads = assessment.requirements.flatMap(stubReq => {
-    const req = insertedReqs.find(r => r.name === stubReq.name)
-    if (!req) return []
+  const subTaskPayloads = assessment.requirements.flatMap((stubReq, i) => {
+    const req = insertedReqs[i]
     return stubReq.sub_tasks.map(stubTask => ({
       requirement_id: req.id,
       name: stubTask.name,
       type: stubTask.type,
-      status: (stubTask.type === 'automated' && passport && passport.expiry_date >= minExpiry)
+      status: (stubTask.type === 'automated' && passportExpiry && passportExpiry >= minExpiry)
         ? 'complete' as const
         : 'pending' as const,
       sort_order: stubTask.sort_order,
@@ -126,18 +130,8 @@ async function insertTransitRequirements(
     transit_note: string | null
     time_required_days: number
   }>,
-  passportId: string | null,
+  passportExpiry: string | null,
 ) {
-  let passport: { expiry_date: string } | null = null
-  if (passportId) {
-    const { data } = await supabase
-      .from('passports')
-      .select('expiry_date')
-      .eq('id', passportId)
-      .single()
-    passport = data
-  }
-
   for (const transit of transits) {
     if (transit.visa_required !== true) continue
 
@@ -178,7 +172,7 @@ async function insertTransitRequirements(
       requirement_id: insertedReq.id,
       name: task.name,
       type: task.type,
-      status: (task.type === 'automated' && passport && minExpiry && passport.expiry_date >= minExpiry)
+      status: (task.type === 'automated' && passportExpiry && minExpiry && passportExpiry >= minExpiry)
         ? 'complete' as const
         : 'pending' as const,
       sort_order: task.sort_order,
@@ -222,10 +216,12 @@ export async function createTrip(formData: FormData) {
       destination_country_code: leg.destination_country_code,
       start_date: leg.start_date,
       end_date: leg.end_date,
-      duration_days: daysBetween(leg.start_date, leg.end_date),
+      duration_days: durationDays(leg.start_date, leg.end_date),
       purpose: leg.purpose,
       passport_id: leg.passport_id || null,
-      assessment_result: leg.assessment_result,
+      assessment_result: is_historical
+        ? 'no_action_required'
+        : runAssessment(leg.destination_country_code).result,
       sort_order: i,
     }))
   )
@@ -282,28 +278,32 @@ export async function createAndActivateTrip(formData: FormData) {
       destination_country_code: leg.destination_country_code,
       start_date: leg.start_date,
       end_date: leg.end_date,
-      duration_days: daysBetween(leg.start_date, leg.end_date),
+      duration_days: durationDays(leg.start_date, leg.end_date),
       purpose: leg.purpose,
       passport_id: leg.passport_id || null,
-      assessment_result: leg.assessment_result,
+      assessment_result: runAssessment(leg.destination_country_code).result,
       sort_order: i,
     })))
     .select()
 
   if (!insertedLegs) throw new Error('Failed to insert legs')
 
-  // 3. For each leg: insert requirements + sub_tasks (sequential — see gotcha note)
-  for (let i = 0; i < insertedLegs.length; i++) {
-    const dbLeg = insertedLegs[i]
-    const formLeg = legs[i]
+  // 3. For each leg (in parallel): insert requirements + sub_tasks, then set leg status
+  const passportExpiries = await fetchPassportExpiries(supabase, insertedLegs.map(l => l.passport_id))
+
+  await Promise.all(insertedLegs.map(async dbLeg => {
+    const passportExpiry = dbLeg.passport_id
+      ? passportExpiries.get(dbLeg.passport_id) ?? null
+      : null
     const insertedReqs = await insertLegRequirements(
       supabase, trip.id, dbLeg.id,
+      dbLeg.destination_country_code,
       dbLeg.start_date, dbLeg.end_date,
-      formLeg.passport_id || null
+      passportExpiry,
     )
     const legStatus = computeLegComplianceStatus(insertedReqs)
     await supabase.from('trip_legs').update({ compliance_status: legStatus }).eq('id', dbLeg.id)
-  }
+  }))
 
   // 4. Manager approval — trip-level (leg_id = null, transit_id = null)
   await supabase.from('requirements').insert({
@@ -346,7 +346,10 @@ export async function createAndActivateTrip(formData: FormData) {
 
     if (insertedTransits && insertedTransits.length > 0) {
       const firstLegPassportId = legs[0]?.passport_id || null
-      await insertTransitRequirements(supabase, trip.id, insertedTransits, firstLegPassportId)
+      const firstLegExpiry = firstLegPassportId
+        ? passportExpiries.get(firstLegPassportId) ?? null
+        : null
+      await insertTransitRequirements(supabase, trip.id, insertedTransits, firstLegExpiry)
     }
   }
 
@@ -381,15 +384,21 @@ export async function activateTrip(formData: FormData) {
     .eq('trip_id', tripId)
     .order('sort_order')
 
-  for (const leg of legs ?? []) {
+  const passportExpiries = await fetchPassportExpiries(supabase, (legs ?? []).map(l => l.passport_id))
+
+  await Promise.all((legs ?? []).map(async leg => {
+    const passportExpiry = leg.passport_id
+      ? passportExpiries.get(leg.passport_id) ?? null
+      : null
     const insertedReqs = await insertLegRequirements(
       supabase, tripId, leg.id,
+      leg.destination_country_code,
       leg.start_date, leg.end_date,
-      leg.passport_id
+      passportExpiry,
     )
     const legStatus = computeLegComplianceStatus(insertedReqs)
     await supabase.from('trip_legs').update({ compliance_status: legStatus }).eq('id', leg.id)
-  }
+  }))
 
   // Manager approval
   await supabase.from('requirements').insert({
@@ -418,7 +427,10 @@ export async function activateTrip(formData: FormData) {
 
   if (existingTransits && existingTransits.length > 0) {
     const firstLegPassportId = legs?.[0]?.passport_id ?? null
-    await insertTransitRequirements(supabase, tripId, existingTransits, firstLegPassportId)
+    const firstLegExpiry = firstLegPassportId
+      ? passportExpiries.get(firstLegPassportId) ?? null
+      : null
+    await insertTransitRequirements(supabase, tripId, existingTransits, firstLegExpiry)
   }
 
   await supabase
@@ -693,75 +705,6 @@ export async function markApplicationSubmitted(formData: FormData) {
     .eq('id', requirementId)
 
   await syncComplianceStatus(supabase, tripId, user.id)
-
-  revalidatePath(`/trips/${tripId}`)
-}
-
-export async function generateLetter(formData: FormData) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth')
-
-  const subTaskId = formData.get('subTaskId') as string
-  const requirementId = formData.get('requirementId') as string
-  const tripId = formData.get('tripId') as string
-
-  const content = `[Generated letter — download and have it signed, then upload the signed copy to complete this step.]`
-
-  await supabase
-    .from('sub_tasks')
-    .update({ ai_generated_content: content, approval_status: 'draft' })
-    .eq('id', subTaskId)
-
-  await supabase
-    .from('requirements')
-    .update({ status: 'in_progress' })
-    .eq('id', requirementId)
-
-  revalidatePath(`/trips/${tripId}`)
-}
-
-export async function uploadSignedLetter(formData: FormData) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth')
-
-  const file = formData.get('file') as File
-  const subTaskId = formData.get('subTaskId') as string
-  const requirementId = formData.get('requirementId') as string
-  const tripId = formData.get('tripId') as string
-
-  if (!file || file.size === 0) throw new Error('No file provided')
-
-  const ext = file.name.split('.').pop() ?? 'bin'
-  const path = `${user.id}/${tripId}/${requirementId}/letters/${Date.now()}.${ext}`
-
-  const { error: uploadError } = await supabase.storage
-    .from('documents')
-    .upload(path, file, { contentType: file.type })
-
-  if (uploadError) throw new Error(uploadError.message)
-
-  const { data: doc } = await supabase
-    .from('documents')
-    .insert({
-      user_id: user.id,
-      name: file.name,
-      type: 'letter',
-      layer: 'compliance',
-      trip_id: tripId,
-      requirement_id: requirementId,
-      file_url: path,
-      file_size: file.size,
-      mime_type: file.type,
-    })
-    .select()
-    .single()
-
-  await supabase
-    .from('sub_tasks')
-    .update({ status: 'complete', approval_status: 'signed', evidence_document_id: doc?.id ?? null })
-    .eq('id', subTaskId)
 
   revalidatePath(`/trips/${tripId}`)
 }

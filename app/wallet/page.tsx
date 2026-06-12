@@ -16,10 +16,11 @@ export default async function WalletPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: passports }, { data: completedTrips }, { data: authorizations }] = await Promise.all([
+  const [{ data: passports }, { data: completedTrips }, { data: authorizations }, { count: documentCount }] = await Promise.all([
     supabase.from('passports').select('*').eq('user_id', user!.id).order('is_primary', { ascending: false }),
     supabase.from('trip_legs').select('destination_country_code, trip_id, trips!inner(user_id, state)').eq('trips.user_id', user!.id).eq('trips.state', 'completed'),
     supabase.from('authorizations').select('*').eq('user_id', user!.id).order('expiry_date', { ascending: true }),
+    supabase.from('documents').select('id', { count: 'exact', head: true }).eq('user_id', user!.id),
   ])
 
   const passportList = (passports ?? []) as Passport[]
@@ -130,13 +131,17 @@ export default async function WalletPage() {
         <div className="flex-1 h-px bg-border" />
       </div>
       <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden mb-4">
-        <div className="flex items-center gap-3 px-4 py-3 min-h-[44px] opacity-40">
+        <Link href="/wallet/documents" className="flex items-center gap-3 px-4 py-3 min-h-[44px]">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold">All Documents</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Every document across all trips</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {(documentCount ?? 0) > 0
+                ? `${documentCount} document${documentCount !== 1 ? 's' : ''} across all trips`
+                : 'No documents yet'}
+            </p>
           </div>
-          <span className="text-xs text-muted-foreground shrink-0">Coming soon</span>
-        </div>
+          <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+        </Link>
       </div>
     </div>
   )

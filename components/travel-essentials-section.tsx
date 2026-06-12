@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Plus, ChevronRight, Plane, Building2, Shield, FileText } from 'lucide-react'
 import { uploadTravelEssential } from '@/app/actions/trips'
 import type { Document } from '@/lib/types'
-import { SectionHeader } from '@/components/ui-kit'
+import { SectionHeader, Select, PrimaryButton, SecondaryButton } from '@/components/ui-kit'
 
 interface Props {
   documents: Document[]
@@ -117,16 +117,16 @@ export function TravelEssentialsSection({ documents, tripId }: Props) {
 
         {showForm ? (
           <form onSubmit={handleUpload} className="px-4 py-3">
-            <select
+            <Select
               name="documentType"
               value={docType}
               onChange={e => setDocType(e.target.value)}
-              className="w-full h-10 px-3 rounded-xl border border-input bg-background text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-ring"
+              className="mb-2"
             >
               {DOCUMENT_TYPES.map(t => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
-            </select>
+            </Select>
             <input type="hidden" name="tripId" value={tripId} />
             <input
               ref={fileRef}
@@ -144,21 +144,16 @@ export function TravelEssentialsSection({ documents, tripId }: Props) {
               <p className="text-sm text-status-at-risk mb-2">{uploadError}</p>
             )}
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="flex-1 h-10 rounded-xl border border-border text-sm"
-              >
+              <SecondaryButton onClick={() => setShowForm(false)} className="flex-1">
                 Cancel
-              </button>
-              <button
-                type="button"
+              </SecondaryButton>
+              <PrimaryButton
                 onClick={() => fileRef.current?.click()}
-                disabled={isPending}
-                className="flex-1 h-10 rounded-xl bg-foreground text-background text-sm font-semibold disabled:opacity-60"
+                loading={isPending}
+                className="flex-1"
               >
                 {isPending ? 'Uploading…' : 'Select file'}
-              </button>
+              </PrimaryButton>
             </div>
           </form>
         ) : documents.length > 0 ? (

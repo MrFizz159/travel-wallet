@@ -1,8 +1,6 @@
 import Link from 'next/link'
 import { createPassportWizard } from '@/app/actions/profile'
-
-const inputClass = 'w-full h-12 px-4 rounded-xl border border-input bg-background text-base focus:outline-none focus:ring-2 focus:ring-ring'
-const labelClass = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground'
+import { Field, Input, PrimaryButton } from '@/components/ui-kit'
 
 export default function PassportSetupPage() {
   return (
@@ -19,38 +17,28 @@ export default function PassportSetupPage() {
       </div>
 
       <form action={createPassportWizard} className="flex flex-col gap-6 mt-8">
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Issuing country</label>
-          <input type="text" name="issuing_country" required placeholder="e.g. United Kingdom" className={inputClass} />
-        </div>
+        <Field label="Issuing country">
+          <Input type="text" name="issuing_country" required placeholder="e.g. United Kingdom" />
+        </Field>
 
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Nationality</label>
-          <input type="text" name="nationality" required placeholder="e.g. British" className={inputClass} />
-        </div>
+        <Field label="Nationality">
+          <Input type="text" name="nationality" required placeholder="e.g. British" />
+        </Field>
 
-        <div className="flex flex-col gap-2">
-          <label className={labelClass}>Passport number</label>
-          <input type="text" name="passport_number" required placeholder="e.g. 123456789" className={inputClass} />
-        </div>
+        <Field label="Passport number">
+          <Input type="text" name="passport_number" required placeholder="e.g. 123456789" />
+        </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-2">
-            <label className={labelClass}>Issue date</label>
-            <input type="date" name="issue_date" required className="h-12 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className={labelClass}>Expiry date</label>
-            <input type="date" name="expiry_date" required className="h-12 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-          </div>
+          <Field label="Issue date">
+            <Input type="date" name="issue_date" required />
+          </Field>
+          <Field label="Expiry date">
+            <Input type="date" name="expiry_date" required />
+          </Field>
         </div>
 
-        <button
-          type="submit"
-          className="w-full h-12 rounded-xl bg-foreground text-background font-semibold text-sm"
-        >
-          Finish →
-        </button>
+        <PrimaryButton type="submit">Finish →</PrimaryButton>
       </form>
 
       <Link

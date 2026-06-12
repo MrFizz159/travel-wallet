@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Plus, ChevronRight, Shield, FileText } from 'lucide-react'
 import { uploadHistoricalDocument } from '@/app/actions/history'
 import type { Document } from '@/lib/types'
-import { SectionHeader } from '@/components/ui-kit'
+import { SectionHeader, Field, Input, Select, PrimaryButton, SecondaryButton } from '@/components/ui-kit'
 
 interface Props {
   documents: Document[]
@@ -47,9 +47,6 @@ function defaultAuthName(type: string, country: string): string {
 function formatDocType(type: string): string {
   return ALL_TYPES.find(t => t.value === type)?.label ?? type.replace(/_/g, ' ')
 }
-
-const inputClass = 'w-full h-11 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring'
-const labelClass = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground block mb-1.5'
 
 export function HistoricalDocSection({ documents, tripId, destinationCountryCode, destinationCountry }: Props) {
   const [showForm, setShowForm] = useState(false)
@@ -124,13 +121,11 @@ export function HistoricalDocSection({ documents, tripId, destinationCountryCode
 
         {showForm && (
           <form onSubmit={handleSubmit} className="px-4 py-4 flex flex-col gap-4">
-            <div>
-              <label className={labelClass}>Document type</label>
-              <select
+            <Field label="Document type">
+              <Select
                 name="documentType"
                 value={docType}
                 onChange={e => handleTypeChange(e.target.value)}
-                className={inputClass}
               >
                 <optgroup label="Visas & authorizations">
                   {AUTH_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -138,41 +133,27 @@ export function HistoricalDocSection({ documents, tripId, destinationCountryCode
                 <optgroup label="Other documents">
                   {NON_AUTH_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </optgroup>
-              </select>
-            </div>
+              </Select>
+            </Field>
 
             {showAuthFields && (
               <>
-                <div>
-                  <label className={labelClass}>Authorization name</label>
-                  <input
+                <Field label="Authorization name">
+                  <Input
                     type="text"
                     name="auth_name"
                     value={authName}
                     onChange={e => setAuthName(e.target.value)}
                     required
-                    className={inputClass}
                   />
-                </div>
+                </Field>
                 <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className={labelClass}>Issue date</label>
-                    <input
-                      type="date"
-                      name="issue_date"
-                      required
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Expiry date</label>
-                    <input
-                      type="date"
-                      name="expiry_date"
-                      required
-                      className={inputClass}
-                    />
-                  </div>
+                  <Field label="Issue date">
+                    <Input type="date" name="issue_date" required />
+                  </Field>
+                  <Field label="Expiry date">
+                    <Input type="date" name="expiry_date" required />
+                  </Field>
                 </div>
               </>
             )}
@@ -191,7 +172,7 @@ export function HistoricalDocSection({ documents, tripId, destinationCountryCode
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              className="w-full h-11 rounded-xl border border-dashed border-border text-sm text-left px-4 truncate"
+              className="w-full h-12 rounded-xl border border-dashed border-border text-sm text-left px-4 truncate"
             >
               <span className={selectedFile ? 'text-foreground' : 'text-muted-foreground'}>
                 {selectedFile ? selectedFile.name : 'Select file…'}
@@ -203,20 +184,17 @@ export function HistoricalDocSection({ documents, tripId, destinationCountryCode
             )}
 
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={cancel}
-                className="flex-1 h-11 rounded-xl border border-border text-sm"
-              >
+              <SecondaryButton onClick={cancel} className="flex-1">
                 Cancel
-              </button>
-              <button
+              </SecondaryButton>
+              <PrimaryButton
                 type="submit"
-                disabled={!selectedFile || isPending}
-                className="flex-1 h-11 rounded-xl bg-foreground text-background text-sm font-semibold disabled:opacity-60"
+                disabled={!selectedFile}
+                loading={isPending}
+                className="flex-1"
               >
                 {isPending ? 'Saving…' : 'Save'}
-              </button>
+              </PrimaryButton>
             </div>
           </form>
         )}

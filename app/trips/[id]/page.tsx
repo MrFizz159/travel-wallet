@@ -2,7 +2,16 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { TripDetailView } from '@/components/trip-detail-view'
 import { cancelTrip } from '@/app/actions/trips'
-import type { TripDetail, LegDetail, RequirementRow } from '@/lib/db-types'
+import { runAssessment, type AssessmentOutput } from '@/lib/assessment/stub'
+import type { TripDetail, LegDetail, RequirementRow, TransitWithRequirement } from '@/lib/db-types'
+import type { Trip, TripLeg, TransitStop, Document, TravelCase } from '@/lib/types'
+
+type RawTrip = Trip & {
+  trip_legs: TripLeg[] | null
+  trip_transits: TransitStop[] | null
+  documents: Document[] | null
+  cases: TravelCase[] | null
+}
 
 export default async function TripDetailPage({
   params,
@@ -13,60 +22,81 @@ export default async function TripDetailPage({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: raw, error } = await supabase
-    .from('trips')
-    .select(`
-      *,
-      trip_legs (
+  const [tripRes, reqRes] = await Promise.all([
+    supabase
+      .from('trips')
+      .select(`
         *,
-        requirements (
-          *,
-          sub_tasks ( * ),
-          documents ( * )
-        )
-      ),
-      trip_transits (
-        *,
-        requirements (
-          *,
-          sub_tasks ( * ),
-          documents ( * )
-        )
-      ),
-      requirements (
+        trip_legs ( * ),
+        trip_transits ( * ),
+        documents ( * ),
+        cases ( * )
+      `)
+      .eq('id', id)
+      .eq('user_id', user!.id)
+      .single(),
+    supabase
+      .from('requirements')
+      .select(`
         *,
         sub_tasks ( * ),
         documents ( * )
-      ),
-      documents ( * ),
-      cases ( * )
-    `)
-    .eq('id', id)
-    .eq('user_id', user!.id)
-    .single()
+      `)
+      .eq('trip_id', id),
+  ])
 
-  if (error) console.error('[TripDetailPage] Supabase error:', error)
+  if (tripRes.error) console.error('[TripDetailPage] Supabase error:', tripRes.error)
+  if (reqRes.error) console.error('[TripDetailPage] Supabase error:', reqRes.error)
+
+  const raw = tripRes.data as RawTrip | null
   if (!raw) notFound()
 
-  // Shape raw data into TripDetail
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawAny = raw as any
-  const tripDetail: TripDetail = {
-    ...rawAny,
-    legs: ([...(rawAny.trip_legs ?? [])] as LegDetail[]).sort((a, b) => a.sort_order - b.sort_order),
-    transits: ([...(rawAny.trip_transits ?? [])] as any[]).sort((a, b) => a.sort_order - b.sort_order).map(t => ({
-      ...t,
-      requirement: ((t.requirements ?? []) as RequirementRow[])[0] ?? null,
-    })),
-    // manager_approval only — transit reqs have transit_id set and are excluded here
-    tripRequirements: (rawAny.requirements ?? []).filter((r: any) => r.type === 'manager_approval' && r.leg_id === null),
-    documents: rawAny.documents ?? [],
-    cases: rawAny.cases ?? [],
+  // Group requirements: leg_id → leg, transit_id → transit, neither → trip level
+  const requirements = (reqRes.data ?? []) as RequirementRow[]
+  const legRequirements = new Map<string, RequirementRow[]>()
+  const transitRequirements = new Map<string, RequirementRow>()
+  const tripRequirements: RequirementRow[] = []
+
+  for (const req of requirements) {
+    if (req.leg_id) {
+      const list = legRequirements.get(req.leg_id)
+      if (list) list.push(req)
+      else legRequirements.set(req.leg_id, [req])
+    } else if (req.transit_id) {
+      if (!transitRequirements.has(req.transit_id)) transitRequirements.set(req.transit_id, req)
+    } else if (req.type === 'manager_approval') {
+      // manager_approval only — leg and transit reqs are attached above
+      tripRequirements.push(req)
+    }
   }
+
+  const legs: LegDetail[] = [...(raw.trip_legs ?? [])]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map(leg => ({ ...leg, requirements: legRequirements.get(leg.id) ?? [] }))
+
+  const transits: TransitWithRequirement[] = [...(raw.trip_transits ?? [])]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map(t => ({ ...t, requirement: transitRequirements.get(t.id) ?? null }))
+
+  const tripDetail: TripDetail = {
+    ...raw,
+    legs,
+    transits,
+    tripRequirements,
+    documents: raw.documents ?? [],
+    cases: raw.cases ?? [],
+  }
+
+  // Exploratory trips: compute assessment previews server-side (the stub is the
+  // seam a real assessment engine replaces — it never runs in the client).
+  const legPreviews: Record<string, AssessmentOutput> | undefined =
+    raw.state === 'exploratory'
+      ? Object.fromEntries(legs.map(l => [l.id, runAssessment(l.destination_country_code)]))
+      : undefined
 
   return (
     <div className="max-w-lg mx-auto px-4 pb-4">
-      <TripDetailView trip={tripDetail} />
+      <TripDetailView trip={tripDetail} legPreviews={legPreviews} />
       {(raw.state === 'exploratory' || raw.state === 'active') && (
         <div className="mt-8 pt-6 border-t border-border">
           <form action={cancelTrip}>

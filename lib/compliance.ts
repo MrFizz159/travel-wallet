@@ -1,25 +1,15 @@
 import type { Requirement, RequirementStatus, ComplianceStatus, TransitStop } from './types'
+import { todayStr } from './dates'
 
-export function subtractDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  d.setDate(d.getDate() - days)
-  return d.toISOString().split('T')[0]
-}
-
-export function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  d.setDate(d.getDate() + days)
-  return d.toISOString().split('T')[0]
-}
-
-function todayStr(): string {
-  return new Date().toISOString().split('T')[0]
-}
+// Re-exported so existing import sites (e.g. app/actions/trips.ts) keep working.
+export { subtractDays, addDays } from './dates'
 
 export function effectiveStatus(req: Requirement): RequirementStatus {
   if (req.status === 'complete') return 'complete'
   if (req.has_active_case) return 'in_progress'
-  if (req.latest_start_date && todayStr() >= req.latest_start_date) return 'at_risk'
+  // PRD §9.2: At Risk means the latest start date has passed and the user
+  // still hasn't started — strictly after the deadline, not on the day itself.
+  if (req.status === 'not_started' && req.latest_start_date && todayStr() > req.latest_start_date) return 'at_risk'
   return req.status
 }
 

@@ -9,13 +9,15 @@ import {
 import {
   uploadEvidence,
   markApplicationSubmitted,
-  generateLetter,
-  uploadSignedLetter,
   sendManagerApproval,
   resolveManagerApproval,
 } from '@/app/actions/trips'
+import { generateLetter, uploadSignedLetter } from '@/app/actions/letters'
 import { initiateCase } from '@/app/actions/cases'
-import { PrimaryButton } from '@/components/ui-kit'
+import {
+  PrimaryButton, BottomSheet, statusClasses, Input, Select, Field, ProgressBar,
+  type StatusValue,
+} from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
 import type { RequirementRow } from '@/lib/db-types'
 import type { RequirementStatus, TravelCase, SubTask, ApprovalLogEntry } from '@/lib/types'
@@ -31,18 +33,29 @@ interface Props {
 
 // ── Status chip ───────────────────────────────────────────────────────────────
 
-const STATUS_CHIP: Record<RequirementStatus, { label: string; cls: string }> = {
-  not_started: { label: 'Not started', cls: 'bg-muted text-muted-foreground' },
-  in_progress:  { label: 'In progress', cls: 'bg-status-incomplete-bg text-status-incomplete' },
-  at_risk:      { label: 'At Risk',     cls: 'bg-status-at-risk-bg text-status-at-risk' },
-  complete:     { label: 'Complete',    cls: 'bg-status-compliant-bg text-status-compliant' },
+// Colours come from the ui-kit status module; labels stay drawer-specific
+// ('In progress' / 'Complete' rather than the badge defaults).
+
+const STATUS_VALUE: Record<Exclude<RequirementStatus, 'not_started'>, StatusValue> = {
+  in_progress: 'incomplete',
+  at_risk: 'at_risk',
+  complete: 'compliant',
+}
+
+const STATUS_LABEL: Record<RequirementStatus, string> = {
+  not_started: 'Not started',
+  in_progress: 'In progress',
+  at_risk: 'At Risk',
+  complete: 'Complete',
 }
 
 function StatusChip({ status }: { status: RequirementStatus }) {
-  const v = STATUS_CHIP[status]
+  const colours = status === 'not_started'
+    ? { bg: 'bg-muted', text: 'text-muted-foreground' }
+    : statusClasses(STATUS_VALUE[status])
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold leading-none ${v.cls}`}>
-      {v.label}
+    <span className={cn('inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold leading-none', colours.bg, colours.text)}>
+      {STATUS_LABEL[status]}
     </span>
   )
 }
@@ -87,9 +100,7 @@ function CaseSummaryCard({ travelCase, tripId, onClose }: {
         <p className="text-sm font-medium">{travelCase.status}</p>
         <p className="text-xs text-muted-foreground mt-0.5">Sarah Johnson — Case Manager</p>
       </div>
-      <div className="h-1 rounded-full bg-muted overflow-hidden">
-        <div className="h-full rounded-full bg-foreground" style={{ width: `${travelCase.progress}%` }} />
-      </div>
+      <ProgressBar value={travelCase.progress} className="h-1" />
       <Link
         href={`/trips/${tripId}/cases/${travelCase.id}`}
         onClick={onClose}
@@ -107,6 +118,7 @@ function CaseSummaryCard({ travelCase, tripId, onClose }: {
 function getAtRiskMessage(
   tripStartDate: string | undefined,
   latestStartDate: string | null,
+  timeRequiredDays: number,
   portalTask: SubTask | undefined,
 ): string | null {
   if (!tripStartDate) return null
@@ -120,7 +132,7 @@ function getAtRiskMessage(
     const latest = new Date(latestStartDate + 'T00:00:00')
     if (today > latest) {
       const daysLeft = Math.max(0, Math.round((travel.getTime() - today.getTime()) / 86400000))
-      return `Deadline to start passed — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} required before travel`
+      return `Deadline to start passed — ${timeRequiredDays} day${timeRequiredDays !== 1 ? 's' : ''} needed, ${daysLeft} day${daysLeft !== 1 ? 's' : ''} until travel.`
     }
     return null
   }
@@ -184,17 +196,27 @@ function AutomatedStep({ task, stepNumber, reqComplete }: {
 
 // ── Generatable (letter) step ─────────────────────────────────────────────────
 
-function GeneratableStep({ task, stepNumber, isManaged, reqComplete, tripId, requirementId }: {
+function GeneratableStep({ task, stepNumber, isManaged, reqComplete, tripId, requirementId, documents, onClose }: {
   task: SubTask; stepNumber: number; isManaged: boolean; reqComplete: boolean
   tripId: string; requirementId: string
+  documents: RequirementRow['documents']; onClose: () => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [hasDownloaded, setHasDownloaded] = useState(false)
+  const [generated, setGenerated] = useState<{ documentId: string; source: 'ai' | 'stub' } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const hasGenerated = !!task.ai_generated_content
   const hasUploaded = !!task.evidence_document_id || task.approval_status === 'signed'
   const state: StepState = reqComplete || hasUploaded ? 'complete' : hasGenerated ? 'in_progress' : 'not_started'
+
+  // Resolve the draft document id: prefer the result from this session's generation,
+  // otherwise (e.g. drawer re-opened after a refresh) derive it from the
+  // requirement's documents written by the server action.
+  const draftDocumentId = generated?.documentId
+    ?? documents.find(d => d.type === 'letter_draft' && d.name.startsWith(task.name))?.id
+    ?? null
 
   function handleGenerate() {
     setError(null)
@@ -203,7 +225,10 @@ function GeneratableStep({ task, stepNumber, isManaged, reqComplete, tripId, req
     fd.append('requirementId', requirementId)
     fd.append('tripId', tripId)
     startTransition(async () => {
-      try { await generateLetter(fd) }
+      try {
+        const result = await generateLetter(fd)
+        setGenerated(result)
+      }
       catch (err) { setError(err instanceof Error ? err.message : 'Failed to generate') }
     })
   }
@@ -219,6 +244,7 @@ function GeneratableStep({ task, stepNumber, isManaged, reqComplete, tripId, req
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+    setHasDownloaded(true)
   }
 
   function handleUpload(file: File) {
@@ -244,25 +270,59 @@ function GeneratableStep({ task, stepNumber, isManaged, reqComplete, tripId, req
           <>
             {task.description && <p className="text-xs text-muted-foreground mt-0.5">{task.description}</p>}
             {!isManaged && (
-              <button
-                onClick={handleGenerate}
-                disabled={isPending}
-                className="mt-2 text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary font-semibold min-h-[32px] disabled:opacity-50 flex items-center gap-1"
-              >
-                {isPending && <Loader2 size={10} className="animate-spin" />}
-                {isPending ? 'Generating…' : 'Generate'}
-              </button>
+              <>
+                <button
+                  onClick={handleGenerate}
+                  disabled={isPending}
+                  className="mt-2 text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary font-semibold min-h-[32px] disabled:opacity-50 flex items-center gap-1"
+                >
+                  {isPending && <Loader2 size={10} className="animate-spin" />}
+                  {isPending ? 'Generating…' : 'Generate'}
+                </button>
+              </>
             )}
           </>
         )}
 
-        {state === 'in_progress' && (
+        {state === 'in_progress' && !hasDownloaded && (
+          <>
+            <p className="text-xs text-status-incomplete mt-0.5">Draft ready</p>
+            {!isManaged && (
+              <>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+                  <button
+                    onClick={handleDownload}
+                    className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background font-semibold min-h-[32px] flex items-center gap-1"
+                  >
+                    <Download size={11} />
+                    Download
+                  </button>
+                  {draftDocumentId && (
+                    <Link
+                      href={`/trips/${tripId}/documents/${draftDocumentId}`}
+                      onClick={onClose}
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-2 min-h-[44px]"
+                    >
+                      <FileText size={11} />
+                      View letter
+                    </Link>
+                  )}
+                </div>
+                {generated?.source === 'stub' && (
+                  <p className="text-xs text-muted-foreground mt-1.5">AI generation is stubbed in this prototype.</p>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {state === 'in_progress' && hasDownloaded && (
           <>
             <p className="text-xs text-status-incomplete mt-0.5">
               Downloaded — upload signed copy to complete this step
             </p>
             {!isManaged && (
-              <div className="flex flex-wrap gap-2 mt-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2">
                 <button
                   onClick={handleDownload}
                   className="text-xs px-3 py-1.5 rounded-full border border-border font-semibold min-h-[32px] flex items-center gap-1"
@@ -285,6 +345,16 @@ function GeneratableStep({ task, stepNumber, isManaged, reqComplete, tripId, req
                   {isPending ? <Loader2 size={10} className="animate-spin" /> : <Upload size={11} />}
                   Upload signed copy
                 </button>
+                {draftDocumentId && (
+                  <Link
+                    href={`/trips/${tripId}/documents/${draftDocumentId}`}
+                    onClick={onClose}
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-2 min-h-[44px]"
+                  >
+                    <FileText size={11} />
+                    View letter
+                  </Link>
+                )}
               </div>
             )}
           </>
@@ -484,28 +554,22 @@ function PrimaryActionStep({ task, stepNumber, isManaged, reqComplete, tripId, r
 
             {isAuth && (
               <>
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground block mb-1.5">
-                    Authorisation name
-                  </label>
-                  <input
+                <Field label="Authorisation name">
+                  <Input
                     type="text"
                     name="auth_name"
                     value={authName}
                     onChange={e => setAuthName(e.target.value)}
                     required
-                    className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
-                </div>
+                </Field>
                 <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground block mb-1.5">Issue date</label>
-                    <input type="date" name="issue_date" required className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground block mb-1.5">Expiry date</label>
-                    <input type="date" name="expiry_date" required className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-                  </div>
+                  <Field label="Issue date">
+                    <Input type="date" name="issue_date" required />
+                  </Field>
+                  <Field label="Expiry date">
+                    <Input type="date" name="expiry_date" required />
+                  </Field>
                 </div>
               </>
             )}
@@ -662,21 +726,14 @@ function ApprovalDrawerBody({
         {requirement.why_it_applies && (
           <p className="text-sm text-muted-foreground mb-5">{requirement.why_it_applies}</p>
         )}
-        <div className="mb-4">
-          <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground block mb-1.5">
-            Select approver
-          </label>
-          <select
-            value={selectedManager}
-            onChange={e => setSelectedManager(e.target.value)}
-            className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
+        <Field label="Select approver" className="mb-4">
+          <Select value={selectedManager} onChange={e => setSelectedManager(e.target.value)}>
             <option value="">Choose a manager…</option>
             {MANAGERS.map(name => (
               <option key={name} value={name}>{name}</option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
         <PrimaryButton onClick={handleSend} disabled={!selectedManager || isSending} loading={isSending}>
           {isSending ? 'Sending…' : 'Send for approval'}
         </PrimaryButton>
@@ -737,16 +794,12 @@ function CenturoConfirmModal({ requirementName, onConfirm, onDismiss, isPending,
   isPending: boolean; error: string | null
 }) {
   return (
-    <>
-      <div className="fixed inset-0 z-[70] bg-black/50" onClick={onDismiss} />
-      <div className="fixed inset-x-0 bottom-0 z-[71] bg-card rounded-t-2xl px-5 pt-5 pb-10">
-        <div className="flex justify-center mb-4">
-          <div className="w-8 h-1 rounded-full bg-border" />
-        </div>
+    <BottomSheet open onClose={onDismiss} layer="modal">
+      <div className="px-5 pt-3 pb-10">
         <h3 className="text-lg font-bold mb-2">Let Centuro handle this</h3>
         <p className="text-sm text-muted-foreground mb-6">
           Our team will manage your {requirementName} end to end — preparation, application, and tracking.
-          We'll update you here as things progress.
+          We&apos;ll update you here as things progress.
         </p>
         {error && <p className="text-xs text-status-at-risk mb-3">{error}</p>}
         <PrimaryButton onClick={onConfirm} loading={isPending} className="mb-3">
@@ -756,10 +809,10 @@ function CenturoConfirmModal({ requirementName, onConfirm, onDismiss, isPending,
           onClick={onDismiss}
           className="w-full text-sm text-muted-foreground flex items-center justify-center min-h-[44px]"
         >
-          I'll do this myself
+          I&apos;ll do this myself
         </button>
       </div>
-    </>
+    </BottomSheet>
   )
 }
 
@@ -783,7 +836,7 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
     ? getStartByDate(requirement.latest_start_date, tripStartDate, requirement.time_required_days)
     : null
 
-  const atRiskMessage = getAtRiskMessage(tripStartDate, requirement.latest_start_date, portalTask)
+  const atRiskMessage = getAtRiskMessage(tripStartDate, requirement.latest_start_date, requirement.time_required_days, portalTask)
 
   function handleInitiateCenturo() {
     const targetTask = portalTask ?? sortedTasks.find(t => t.type === 'primary_action')
@@ -803,13 +856,7 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 z-[59]" onClick={onClose} />
-
-      <div className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background max-h-[85vh] overflow-y-auto">
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="w-8 h-1 rounded-full bg-border" />
-        </div>
-
+      <BottomSheet open onClose={onClose} layer="sheet">
         <div className="px-5 pb-8 pt-2">
 
           {/* Header */}
@@ -958,6 +1005,8 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
                             reqComplete={reqComplete}
                             tripId={tripId}
                             requirementId={requirement.id}
+                            documents={requirement.documents}
+                            onClose={onClose}
                           />
                         )
                       }
@@ -1011,7 +1060,7 @@ export function RequirementDrawer({ requirement, tripId, tripStartDate, travelCa
             </>
           )}
         </div>
-      </div>
+      </BottomSheet>
 
       {showModal && (
         <CenturoConfirmModal
