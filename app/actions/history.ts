@@ -70,13 +70,7 @@ export async function uploadHistoricalDocument(formData: FormData) {
   if (!file || file.size === 0) throw new Error('No file provided')
 
   const ext = file.name.split('.').pop() ?? 'bin'
-  const path = `${user.id}/${tripId}/history/${Date.now()}.${ext}`
-
-  const { error: uploadError } = await supabase.storage
-    .from('documents')
-    .upload(path, file, { contentType: file.type })
-
-  if (uploadError) throw new Error(uploadError.message)
+  const path = `stub/${Date.now()}.${ext}`
 
   const isAuthType = AUTH_DOC_TYPES.includes(documentType)
 

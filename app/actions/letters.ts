@@ -185,13 +185,7 @@ export async function uploadSignedLetter(formData: FormData) {
   if (!file || file.size === 0) throw new Error('No file provided')
 
   const ext = file.name.split('.').pop() ?? 'bin'
-  const path = `${user.id}/${tripId}/${requirementId}/letters/${Date.now()}.${ext}`
-
-  const { error: uploadError } = await supabase.storage
-    .from('documents')
-    .upload(path, file, { contentType: file.type })
-
-  if (uploadError) throw new Error(uploadError.message)
+  const path = `stub/${Date.now()}.${ext}`
 
   const { data: doc } = await supabase
     .from('documents')

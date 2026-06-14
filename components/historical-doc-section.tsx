@@ -164,7 +164,7 @@ export function HistoricalDocSection({ documents, tripId, destinationCountryCode
               ref={fileRef}
               type="file"
               name="file"
-              accept=".pdf,.jpg,.jpeg,.png"
+              accept="*/*"
               className="hidden"
               onChange={e => setSelectedFile(e.currentTarget.files?.[0] ?? null)}
             />

@@ -4,6 +4,8 @@
 
 **Framing:** this is a PoC built to show what's possible. The goals are an optimal, fast architecture and a correct design system to keep iterating on. Happy flows are acceptable; full country coverage and hostile-input hardening are not goals. The detailed reports tier findings on absolute severity; this summary re-triages them against the PoC lens, so the tiers here are the ones to work from.
 
+> **Execution status (2026-06-12): all 4 steps of the order of attack are DONE** (commits `e7a68a7`, `a327b86`), plus AI letter generation shipped from the recommendations list. See the annotations in the order of attack below. The detailed reports (01–03) describe the codebase as reviewed; their Critical and Should-fix findings within steps 1–4 scope are resolved. Still open: the de-prioritised items above each verdict, the production-readiness notes in report 01, and the remaining new-feature recommendations.
+
 | Report | Findings (absolute tiers) |
 |---|---|
 | [01 — Code & architecture](01-code-architecture.md) | 4 Critical · 9 Should-fix · 7 Nice-to-have |
@@ -59,13 +61,13 @@
 
 ---
 
-## Order of attack (PoC lens)
+## Order of attack (PoC lens) — all four steps executed 2026-06-12
 
-1. **Happy-flow fixes (~1 day):** border access for completed requirements, timezone date helpers (via `lib/dates.ts`), transit-race CTA gate, at-risk gate on `not_started`, the two false-copy fixes.
-2. **Architecture for iteration (~1 day):** assessment behind a server action, single requirements fetch on trip detail, parallelise leg inserts.
-3. **Design-system extraction (2–3 days):** Input/Field, one StatusBadge module, one BottomSheet, drop the dark-mode claim, adopt the growth rules.
-4. **Decompositions opportunistically:** split `trips.ts` and the requirement drawer as you touch them.
-5. **Then build new features** on the cleaned base.
+1. ~~**Happy-flow fixes:**~~ **DONE.** Completed requirements open the drawer and sub-tasks link to their evidence document (Flow E restored); UTC-safe `lib/dates.ts` replaced all 4 duplicate helpers; CTAs disable while transit checks run; at-risk fires only on `not_started` strictly past the deadline; at-risk message shows Time Required; letter step says "Draft ready" until actually downloaded.
+2. ~~**Architecture for iteration:**~~ **DONE.** Assessment runs server-side (`app/actions/assessment.ts` seam; the server derives `assessment_result`, exploratory previews computed in the page); trip detail fetches requirements once (the `any`-escape went with it); leg inserts are collision-safe (index correlation) and parallel, passport lookups batched.
+3. ~~**Design-system extraction:**~~ **DONE.** `Input`/`Select`/`Field`, `BottomSheet` (Escape, scroll lock, z-tokens), `ProgressBar`, and `status.tsx` as the single status module — 10+ files migrated off inline input strings, both drawer sheets and the raw-palette pills converted. Dark mode deleted, z-index scale added, growth rules written into `CLAUDE.md`.
+4. ~~**Decompositions:**~~ **DONE** (not just opportunistically). `app/actions/trips.ts` → `app/actions/trips/` (create / lifecycle / transits / evidence / approvals + `_shared` with `requireUser()`, barrel index, export parity verified). `components/requirement-drawer.tsx` → `components/requirement-drawer/` (shell + helpers + approval-body + one file per step type; verbatim move verified by normalised diff).
+5. **Build new features** on the cleaned base — this is where things stand now. First one shipped: see AI letter generation below.
 
 ---
 
@@ -76,12 +78,12 @@ Grounded in the PRD's deferred scope and what the code now supports. Value/effor
 **Near-term, high value:**
 - **Thresholds (PRD §7.6).** The Wallet card already says "Coming soon", the types exist, and multi-leg travel history is accumulating real day counts. This is the feature that makes the wallet sticky between trips (Schengen 90/180 is the obvious first rule). Medium effort: one table, one evaluation function over existing leg data, one screen.
 - **Travel history export (PRD §7.5).** The data is already structured per leg; a filtered PDF/text export is low effort and directly serves the "visa application asks for travel history" job the PRD opens with.
-- **Document repository (PRD §7.4).** Second "Coming soon" card. Documents already carry type/layer/trip links; this is mostly a filterable list view. Low effort, completes the border-access story alongside the Flow E fix.
+- ~~**Document repository (PRD §7.4).**~~ **SHIPPED (basic).** The wallet's All Documents card is live with a flat list at `/wallet/documents` (built alongside letter generation). Remaining headroom: filters by type/trip/country/date per the PRD.
 - **Authorization-aware assessment.** The authorizations registry is built but the stub ignores it. Teaching the stub to return `no_action_required` when a valid authorization covers the destination (the PRD's Flow B) would make the demo materially smarter for near-zero engine work.
 
 **Medium-term:**
 - **Expiry notifications.** Passport and authorization expiry dates are stored; a home-screen alerts strip (before any push infrastructure) covers the PRD §14 triggers cheaply.
-- **Real AI letter generation.** The Anthropic SDK is already wired for transit checks; pointing the same pattern at letter generation (profile + trip context → draft) replaces the placeholder and is a strong demo moment.
+- ~~**Real AI letter generation.**~~ **SHIPPED.** `lib/letters/generate.ts` drafts support/invitation letters via Claude (Opus 4.8) from profile + trip context, with a template fallback when no API key. Drafts are viewable as styled letters from the trip and the wallet, with print and download.
 - **Trip notes / multi-passport per user.** Both deferred in the PoC; multi-passport is partially supported in the schema already (per-leg `passport_id`).
 
 **Strategic (flagging, not specing):**

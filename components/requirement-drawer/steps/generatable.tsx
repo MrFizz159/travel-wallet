@@ -146,7 +146,7 @@ export function GeneratableStep({ task, stepNumber, isManaged, reqComplete, trip
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
+                  accept="*/*"
                   className="hidden"
                   onChange={e => { const f = e.currentTarget.files?.[0]; if (f) handleUpload(f) }}
                 />

@@ -132,7 +132,7 @@ export function TravelEssentialsSection({ documents, tripId }: Props) {
               ref={fileRef}
               type="file"
               name="file"
-              accept=".pdf,.jpg,.jpeg,.png"
+              accept="*/*"
               className="hidden"
               onChange={e => {
                 if (e.currentTarget.files?.[0]) {

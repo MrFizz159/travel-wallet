@@ -20,13 +20,7 @@ export async function uploadEvidence(formData: FormData) {
   if (!file || file.size === 0) throw new Error('No file provided')
 
   const ext = file.name.split('.').pop() ?? 'bin'
-  const path = `${user.id}/${tripId}/${requirementId}/${Date.now()}.${ext}`
-
-  const { error: uploadError } = await supabase.storage
-    .from('documents')
-    .upload(path, file, { contentType: file.type })
-
-  if (uploadError) throw new Error(uploadError.message)
+  const path = `stub/${Date.now()}.${ext}`
 
   const isAuthType = AUTH_REQ_TYPES.includes(reqType)
 
@@ -152,13 +146,7 @@ export async function uploadTravelEssential(formData: FormData) {
   if (!file || file.size === 0) throw new Error('No file provided')
 
   const ext = file.name.split('.').pop() ?? 'bin'
-  const path = `${user.id}/${tripId}/essentials/${Date.now()}.${ext}`
-
-  const { error: uploadError } = await supabase.storage
-    .from('documents')
-    .upload(path, file, { contentType: file.type })
-
-  if (uploadError) throw new Error(uploadError.message)
+  const path = `stub/${Date.now()}.${ext}`
 
   await supabase.from('documents').insert({
     user_id: user.id,

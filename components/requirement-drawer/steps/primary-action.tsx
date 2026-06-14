@@ -108,7 +108,7 @@ export function PrimaryActionStep({ task, stepNumber, isManaged, reqComplete, tr
               ref={fileRef}
               type="file"
               name="file"
-              accept=".pdf,.jpg,.jpeg,.png"
+              accept="*/*"
               className="hidden"
               onChange={e => {
                 const file = e.currentTarget.files?.[0] ?? null
